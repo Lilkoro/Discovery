@@ -3,6 +3,23 @@ from discovery.autoggen import Auto_gen
 import asyncio
 import traceback # For fetching stacktraces
 import time
+import sys
+import os
+
+class TeeLogger:
+    def __init__(self, filename, stream):
+        self.terminal = stream
+        self.log = open(filename, "a", encoding="utf-8")
+        self.log.write("\n" + "="*50 + f"\n--- NEW SESSION: {time.strftime('%Y-%m-%d %H:%M:%S')} ---\n" + "="*50 + "\n")
+
+    def write(self, message):
+        self.terminal.write(message)
+        self.log.write(message)
+        self.log.flush() # Force write to disk immediately
+
+    def flush(self):
+        self.terminal.flush()
+        self.log.flush()
 
 class DiscoveryMain:
     def __init__(self):
@@ -28,6 +45,10 @@ class DiscoveryMain:
 
 # Main execution
 if __name__ == "__main__":
+    # Mirror all console output to discovery.log
+    sys.stdout = TeeLogger("discovery.log", sys.stdout)
+    sys.stderr = TeeLogger("discovery.log", sys.stderr)
+
     print("\033[92mStarting Auto-Run Discovery Bot...\033[0m")
     while True:
         try:
