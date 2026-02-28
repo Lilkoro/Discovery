@@ -18,7 +18,7 @@ from autogen_ext.models.openai import OpenAIChatCompletionClient
 from autogen_core.model_context import UnboundedChatCompletionContext
 from autogen_core.tools import FunctionTool
 from autogen_core.models import AssistantMessage, LLMMessage, ModelFamily
-from autogen_agentchat.messages import AgentChatEvent
+from autogen_agentchat.messages import AgentEvent
 
 class ReasoningModelContext(UnboundedChatCompletionContext):
     """A model context for reasoning models."""
@@ -39,7 +39,7 @@ class LimitedHistorySelectorGroupChat(SelectorGroupChat):
         super().__init__(*args, **kwargs)
         self._max_history = max_history
 
-    async def _format_history(self, messages: List[AgentChatEvent]) -> str:
+    async def _format_history(self, messages: List[AgentEvent]) -> str:
         # Use only the last N messages for the selector's context
         if len(messages) > self._max_history:
             messages = messages[-self._max_history:]
