@@ -1,4 +1,4 @@
-version: '3.8'
+version: "3.8"
 
 services:
   voyager:
@@ -16,9 +16,9 @@ services:
       - REDIRECT_URL=${REDIRECT_URL:-https://127.0.0.1/auth-response}
       - SECRET_VALUE=${SECRET_VALUE}
     ports:
-      - "3000:3000" # prismarine-viewerポート（Minecraftビューア用）
-      - "${MINECRAFT_PORT:-25565}:${MINECRAFT_PORT:-25565}" # Minecraftサーバーポート（環境変数から自動設定）
+      - "3000:3000" # prismarine-viewer port (for Minecraft viewer)
+      - "${MINECRAFT_PORT:-25565}:${MINECRAFT_PORT:-25565}" # Minecraft server port (auto-set from env var)
     extra_hosts:
-      - "host.docker.internal:host-gateway" # ホストマシンのMinecraftクライアントに接続するため
+      - "host.docker.internal:host-gateway" # To connect to the host machine's Minecraft client
     tty: true
-    stdin_open: true 
+    stdin_open: true

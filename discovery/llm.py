@@ -5,7 +5,7 @@ from typing import Literal, Optional, List, Dict, Union
 from langchain.memory import ConversationBufferMemory
 import json
 import traceback
-import uuid # Gemini の tool call ID 生成に必要
+import uuid # Needed for Gemini tool call ID generation
 
 class LLMClient:
     """
@@ -29,11 +29,11 @@ class LLMClient:
         if self._google_api_key:
             genai.configure(api_key=self._google_api_key)
 
-        # 会話メモリを初期化
+        # Initialize conversation memory
         self.memory = ConversationBufferMemory(return_messages=True)
 
     def _call_openai(self, messages: List[Dict], model: str, tools: Optional[List[Dict]]) -> Dict[str, Union[str, List[Dict], None]]:
-        """ OpenAI API を呼び出す内部メソッド """
+        """ Internal method to call OpenAI API """
         if not self._openai_api_key:
             raise ValueError("OpenAI API key is not configured.")
         try:
@@ -62,10 +62,10 @@ class LLMClient:
             return {'content': response_content, 'tool_calls': response_tool_calls}
         except Exception as e:
             print(f"Error calling OpenAI API: {e}")
-            raise # エラーを再発生させて get_response で処理できるようにする
+            raise # Re-raise the error so that get_response can handle it
 
     def _call_gemini(self, full_prompt: str, model: str, tools: Optional[List[Dict]], thinking_budget: Optional[int]) -> Dict[str, Union[str, List[Dict], None]]:
-        """ Gemini API を呼び出す内部メソッド """
+        """ Internal method to call Gemini API """
         if not self._google_api_key:
             raise ValueError("Google API key is not configured.")
         try:
@@ -103,7 +103,7 @@ class LLMClient:
                             'type': 'function',
                             'function': {
                                 'name': fc.name,
-                                'arguments': json.dumps(dict(fc.args)) if fc.args else "{}" # JSON文字列に変換
+                                'arguments': json.dumps(dict(fc.args)) if fc.args else "{}" # Convert to JSON string
                             }
                         })
                 if text_parts:
@@ -128,79 +128,79 @@ class LLMClient:
         tools: Optional[List[Dict]] = None,
     ) -> Dict[str, Union[str, List[Dict], None]]:
         """
-        指定されたLLMサービスとモデルからレスポンスを取得します。会話メモリ機能とツール/Function Callingをサポートします。
-        内部でサービス固有の呼び出しメソッド (_call_openai, _call_gemini) を使用します。
+        Retrieves responses from the specified LLM service and model. Supports conversation memory functionality and Tool/Function Calling.
+        Internally uses service-specific call methods (_call_openai, _call_gemini).
 
         Args:
-            system_prompt: モデルの動作を制御するシステムプロンプト。
-            user_prompt: ユーザーのクエリまたは指示。
-            service: 使用するLLMサービス ('openai' または 'gemini')。
-            model: 使用する具体的なモデル名 (例: 'gpt-4', 'gemini-pro')。
-            thinking_budget: Geminiの思考プロセスのためのオプショナルなトークン予算。
-                             'gemini' サービスの場合のみ適用。
-                             デフォルトはNone (モデルのデフォルト動作)。
-                             0を設定すると思考を無効化。
-            save_memory: Trueの場合、テキスト応答をメモリに保存 (ツール呼び出し時は保存されない)。
-            use_memory: Trueの場合、過去の会話履歴をプロンプトに含める。
-            tools: LLM に提供するツール/関数の定義リスト (OpenAI/Gemini 形式)。
+            system_prompt: System prompt to control model behavior.
+            user_prompt: User query or instruction.
+            service: LLM service to use ('openai' or 'gemini').
+            model: Specific model name to use (e.g., 'gpt-4', 'gemini-pro').
+            thinking_budget: Optional token budget for Gemini's thinking process.
+                             Applicable only for 'gemini' service.
+                             Default is None (model's default behavior).
+                             Setting 0 disables thinking.
+            save_memory: If True, saves text responses to memory (not saved during tool calls).
+            use_memory: If True, includes past conversation history in the prompt.
+            tools: List of tool/function definitions to provide to the LLM (OpenAI/Gemini format).
 
         Returns:
-            以下のキーを持つ辞書:
-            - 'content': モデルが生成したテキストレスポンス (ツール呼び出し時はNoneの場合あり)。
-            - 'tool_calls': LLM が要求したツール呼び出しのリスト (ツール呼び出しがない場合はNone)。
-                          OpenAI形式 ({'id': str, 'type': 'function', 'function': {'name': str, 'arguments': str}}) に統一。
+            Dictionary with the following keys:
+            - 'content': Model-generated text response (may be None during tool calls).
+            - 'tool_calls': List of tool calls requested by the LLM (None if no tool calls).
+                          Unified to OpenAI format ({'id': str, 'type': 'function', 'function': {'name': str, 'arguments': str}}).
 
         Raises:
-            ValueError: サービスが未対応、APIキーが未設定、
-                      またはthinking_budgetが無効な場合。
-            Exception: API呼び出し中のエラー。
+            ValueError: Service not supported, API key not set,
+                      or thinking_budget is invalid.
+            Exception: Error during API call.
         """
         history_messages: List[Dict[str, str]] = []
         history_text: str = ""
 
         if use_memory:
-            # メモリから過去の会話履歴を取得
-            # ConversationBufferMemory(return_messages=True) の場合、 .chat_memory.messages に BaseMessage のリストが入る
-            # これを OpenAI/Gemini で使える形式に変換する
+            # Retrieve past conversation history from memory
+            # If ConversationBufferMemory(return_messages=True), a list of BaseMessage objects is stored in .chat_memory.messages
+            # Convert this to a format usable by OpenAI/Gemini
             loaded_memory = self.memory.load_memory_variables({})
-            # loaded_memory['history'] は BaseMessage のリスト
+            # loaded_memory['history'] is a list of BaseMessage objects
             base_messages = loaded_memory.get('history', [])
 
-            # OpenAI 形式のメッセージリストを作成
+            # Create OpenAI-formatted message list
             for msg in base_messages:
-                if hasattr(msg, 'content'): # HumanMessage, AIMessage など
+                if hasattr(msg, 'content'): # e.g., HumanMessage, AIMessage
                    role = "user" if msg.type == "human" else "assistant"
                    history_messages.append({"role": role, "content": msg.content})
 
-            # Gemini 形式のテキスト履歴を作成 (単純な連結)
+            # Create Gemini-formatted text history (simple concatenation)
             history_text = "\n".join([f"{'User' if msg.type == 'human' else 'AI'}: {msg.content}" for msg in base_messages])
 
 
         response_data = None
         try:
             if service == "openai":
-                # OpenAI用のメッセージリストを作成
+                # Create message list for OpenAI
                 messages = [{"role": "system", "content": system_prompt}]
                 if use_memory:
                     messages.extend(history_messages)
                 messages.append({"role": "user", "content": user_prompt})
-                # OpenAI呼び出し
+                # OpenAI call
                 response_data = self._call_openai(messages=messages, model=model, tools=tools)
 
             elif service == "gemini":
-                # Gemini用のプロンプトテキストを作成
+                # Create prompt text for Gemini
                 prompt_parts = [system_prompt]
                 if use_memory and history_text:
                     prompt_parts.append("\n\n--- Conversation History ---" + history_text)
                 prompt_parts.append("\n\n--- Current Prompt ---" + user_prompt)
                 full_prompt = "\n".join(prompt_parts)
-                # Gemini呼び出し
+                # Gemini call
                 response_data = self._call_gemini(full_prompt=full_prompt, model=model, tools=tools, thinking_budget=thinking_budget)
 
             else:
                 raise ValueError(f"Unsupported service: {service}. Choose 'openai' or 'gemini'.")
 
-            # メモリへの保存 (テキスト応答があり、ツール呼び出しがない場合のみ)
+            # Save to memory (only if there's a text response and no tool calls)
             response_content = response_data.get('content')
             response_tool_calls = response_data.get('tool_calls')
             if save_memory and response_content and not response_tool_calls:
@@ -209,24 +209,24 @@ class LLMClient:
             return response_data
 
         except Exception as e:
-             # API呼び出し中のエラーをキャッチした場合など
+             # E.g., if an error occurred during API call
              print(f"Error during get_response for service '{service}': {e}")
-             # エラーを示す情報を返すか、Noneを返すか、あるいは再発生させるかなど検討
-             # ここでは空の応答を返す例
+             # Consider whether to return error information, return None, or re-raise the error.
+             # Here is an example of returning an empty response.
              return {'content': None, 'tool_calls': None}
 
-    # メモリをクリアするメソッドを追加しても良い (任意)
+    # You can add a method to clear memory (optional)
     def clear_memory(self):
-        """会話メモリをクリアします。"""
+        """Clears the conversation memory."""
         self.memory.clear()
 
-    # メモリの内容を参照するメソッドを追加
+    # Add a method to refer to the memory content
     def get_memory_string(self) -> str:
-        """現在の会話メモリの内容を整形された文字列として返します。"""
+        """Returns the current conversation memory content as a formatted string."""
         loaded_memory = self.memory.load_memory_variables({})
         base_messages = loaded_memory.get('history', [])
         if not base_messages:
-            return "メモリは空です。"
+            return "Memory is empty."
 
         history_string = "--- Conversation History ---\n"
         for msg in base_messages:
@@ -237,12 +237,12 @@ class LLMClient:
 
     async def handle_tool_calls(self, tool_calls: List[Dict]) -> List[Dict]:
         """
-        LLMから要求されたツール呼び出しを処理し、結果をtoolロールメッセージのリストで返す
+        Processes tool calls requested by the LLM and returns the results as a list of tool role messages
         """
         tool_results = []
         if not self._google_api_key:
-            print("エラー: Google API keyが初期化されていません。ツールを実行できません。")
-            # エラーを示す tool result を返すことも可能
+            print("Error: Google API key is not initialized. Cannot execute tool.")
+            # It is also possible to return a tool result indicating an error.
             for call in tool_calls:
                  tool_results.append({
                      "role": "tool",
@@ -255,7 +255,7 @@ class LLMClient:
             function_name = call['function']['name']
             function_args_str = call['function']['arguments']
             tool_call_id = call['id']
-            result_content = "" # ツール実行結果
+            result_content = "" # Tool execution result
 
             print(f"\n--- Handling Tool Call ---")
             print(f"ID: {tool_call_id}")
@@ -263,14 +263,14 @@ class LLMClient:
             print(f"Arguments: {function_args_str}")
 
             try:
-                # 引数をJSONとしてパース
+                # Parse arguments as JSON
                 args = json.loads(function_args_str)
 
                 if function_name == "get_skill_full_code":
                     skill_name = args.get("skill_name")
                     if skill_name:
-                        # get_skill_code は docstring を除くため注意。含む場合は別途実装が必要
-                        # get_skill_code は非同期なので await する
+                        # Note that get_skill_code excludes docstrings. If included, separate implementation is required.
+                        # get_skill_code is asynchronous, so await it
                         genai_model = genai.GenerativeModel(self._google_api_key)
                         code = await self.get_skill_code(skill_name)
                         if code:
@@ -280,10 +280,10 @@ class LLMClient:
                     else:
                         result_content = "Error: Missing required argument 'skill_name' for get_skill_full_code."
 
-                # --- 他のツールの処理をここに追加 ---
+                # --- Add processing for other tools here ---
                 # elif function_name == "other_tool":
                 #    arg1 = args.get("arg1")
-                #    result = await self.some_other_async_skill(arg1) # 例
+                #    result = await self.some_other_async_skill(arg1) # Example
                 #    result_content = f"Result of other_tool: {result}"
                 # ---------------------------------
 
@@ -293,14 +293,14 @@ class LLMClient:
             except json.JSONDecodeError:
                 result_content = f"Error: Invalid JSON arguments provided for tool '{function_name}': {function_args_str}"
             except Exception as e:
-                # get_skill_code や他のツール実行中の予期せぬエラー
+                # Unexpected error during get_skill_code or other tool execution
                 result_content = f"Error executing tool '{function_name}': {e}"
-                print(f"Error details: {traceback.format_exc()}") # 詳細ログ
+                print(f"Error details: {traceback.format_exc()}") # Detailed log
 
-            print(f"Result Content: {result_content[:200]}...") # 長すぎる場合は省略して表示
+            print(f"Result Content: {result_content[:200]}...") # Omitted if too long
             print("--------------------------\n")
 
-            # LLMに返す tool ロールのメッセージを作成
+            # Create a tool role message to return to the LLM
             tool_results.append({
                 "role": "tool",
                 "tool_call_id": tool_call_id,
@@ -310,38 +310,38 @@ class LLMClient:
         return tool_results
 
     async def run_interactive_loop(self):
-        """LLM と対話的にやり取りし、ツール呼び出しを処理するループ (デモ用)"""
+        """Loop to interact with the LLM and process tool calls (for demo)"""
         if not self._google_api_key:
-            print("エラー: Google API keyが初期化されていません。ツールを実行できません。")
+            print("Error: Google API key is not initialized. Cannot execute tool.")
             return
 
-        # get_skill_full_code ツールの定義
+        # Definition of get_skill_full_code tool
         tools_definition = [
             {
                 "type": "function",
                 "function": {
                     "name": "get_skill_full_code",
-                    "description": "指定されたMinecraftボットのスキル関数の完全なソースコードを取得します。",
+                    "description": "Retrieves the complete source code for a specified Minecraft bot skill function.",
                     "parameters": {
                         "type": "object",
                         "properties": {
                             "skill_name": {
                                 "type": "string",
-                                "description": "ソースコードを取得したいスキル関数の名前 (例: 'move_to_position', 'get_inventory_counts')。"
+                                "description": "The name of the skill function whose source code you want to retrieve (e.g., 'move_to_position', 'get_inventory_counts')."
                             }
                         },
                         "required": ["skill_name"]
                     }
                 }
             }
-            # 他のツールがあればここに追加
+            # Add other tools here if any
         ]
 
-        # 会話履歴 (システムプロンプトで初期化)
+        # Conversation history (initialized with system prompt)
         messages = [
-            {"role": "system", "content": "あなたはMinecraftボットを操作するアシスタントです。必要に応じて提供されたツールを使って情報を取得したり操作を実行したりできます。"}
+            {"role": "system", "content": "You are an assistant that operates a Minecraft bot. You can use the provided tools to get information or perform operations as needed."}
         ]
-        self.clear_memory() # 新しい対話セッション
+        self.clear_memory() # New conversational session
 
         print("\n--- Interactive LLM Loop (Type 'quit' to exit) ---")
         while True:
@@ -352,41 +352,41 @@ class LLMClient:
             messages.append({"role": "user", "content": user_input})
 
             try:
-                # LLM に応答を要求 (ツール定義を渡す)
+                # Request a response from the LLM (pass tool definitions)
                 response_data = self.get_response(
-                    system_prompt="", # 履歴に含まれるため空で良い
-                    user_prompt="",   # 履歴に含まれるため空で良い
-                    service="gemini", # または "openai" (Tool Calling対応モデルを選択)
-                    model="gemini-pro",  # Tool Calling に適したモデルを選択
+                    system_prompt="", # Can be empty because it is included in the history
+                    user_prompt="",   # Can be empty because it is included in the history
+                    service="gemini", # or "openai" (select Tool Calling compatible model)
+                    model="gemini-pro",  # Select a model suitable for Tool Calling
                     tools=tools_definition,
-                    use_memory=False, # use_memory=Trueにして履歴管理をLLMClientに任せても良いが、ここでは手動管理
-                    # messages 引数を直接渡せるように get_response を修正する方がより良い設計かも
-                    # 現状は use_memory=True 相当の動作を messages 配列で模倣する
+                    use_memory=False, # It's fine to set use_memory=True and let LLMClient manage history, but here it's managed manually
+                    # It might be a better design to modify get_response to directly pass the messages argument
+                    # Currently, emulate use_memory=True equivalent behavior with a messages array
                 )
 
-                # ---- get_response が messages を直接受け取れない場合の代替実装 ----
-                # 現在の実装に合わせて、最新のユーザープロンプトと履歴を使う
+                # ---- Alternative implementation if get_response cannot directly receive messages ----
+                # Use the latest user prompt and history to match the current implementation
                 current_user_prompt = messages[-1]["content"]
-                # use_memory=True にして、手動の message append を減らす形も検討
-                # self.memory.chat_memory.add_user_message(current_user_prompt) # メモリに手動追加する場合
+                # Also consider setting use_memory=True to reduce manual message appends
+                # self.memory.chat_memory.add_user_message(current_user_prompt) # If manually adding to memory
 
                 response_data = self.get_response(
-                     system_prompt=messages[0]["content"], # システムプロンプトは常に渡す
-                     user_prompt=current_user_prompt, # 最新のユーザープロンプト
+                     system_prompt=messages[0]["content"], # System prompt is always passed
+                     user_prompt=current_user_prompt, # Latest user prompt
                      service="gemini",
                      model="gemini-pro",
                      tools=tools_definition,
-                     use_memory=True, # LLMClient のメモリを使う
-                     save_memory=False # ループ内で手動管理するか、ここでTrueにして任せるか
+                     use_memory=True, # Use LLMClient's memory
+                     save_memory=False # Manually manage within the loop, or set to True here and let it handle
                  )
                 # ------------------------------------------------------------
 
                 ai_response_content = response_data.get('content')
                 tool_calls = response_data.get('tool_calls')
 
-                # AI の思考プロセス（ツール呼び出しまたはテキスト応答）を履歴に追加
-                # OpenAIの場合、messageオブジェクト全体を追加するのが一般的
-                # ここでは簡略化して content / tool_calls を持つ辞書を追加
+                # Add AI's thought process (tool call or text response) to history
+                # For OpenAI, it's common to add the entire message object
+                # Here, for simplification, add a dictionary with content / tool_calls
                 response_message_for_history = {"role": "assistant"}
                 if tool_calls:
                     response_message_for_history["tool_calls"] = tool_calls
@@ -397,25 +397,25 @@ class LLMClient:
 
                 if tool_calls:
                     print("AI: (Requesting tool use...)")
-                    # ツール呼び出しを処理
+                    # Process tool call
                     tool_results_messages = await self.handle_tool_calls(tool_calls)
-                    # ツール実行結果を履歴に追加
+                    # Add tool execution results to history
                     messages.extend(tool_results_messages)
 
-                    # ツール実行結果を添えて再度LLMに問い合わせ
-                    # ---- 再度 get_response ----
-                    # 最新の履歴 (tool results を含む) を使う
-                    # この部分も get_response が messages を直接受け取る方が綺麗
-                    latest_tool_result_content = tool_results_messages[0]["content"] # 簡略化のため最初の結果のみ
+                    # Query LLM again with tool execution results
+                    # ---- get_response again ----
+                    # Use the latest history (including tool results)
+                    # It would be cleaner if get_response directly received messages for this part too
+                    latest_tool_result_content = tool_results_messages[0]["content"] # First result only for simplification
 
                     response_data_after_tool = self.get_response(
                         system_prompt=messages[0]["content"],
-                        user_prompt=latest_tool_result_content, # tool結果をプロンプトとして渡すのは微妙かも
+                        user_prompt=latest_tool_result_content, # Passing tool results as a prompt might be subtle
                         service="gemini",
                         model="gemini-pro",
                         tools=tools_definition,
-                        use_memory=True, # 継続してメモリを使う
-                        save_memory=True # 最終的なAI応答を保存
+                        use_memory=True, # Continue using memory
+                        save_memory=True # Save final AI response
                     )
                     # -------------------------
 
@@ -423,50 +423,50 @@ class LLMClient:
                     if final_content:
                         print(f"AI: {final_content}")
                         messages.append({"role": "assistant", "content": final_content})
-                        # LLMClientのメモリにも最終応答を保存する場合
+                        # When saving the final response to LLMClient's memory as well
                         # self.memory.save_context({"input": tool_results_messages[-1]["content"]}, {"output": final_content})
                     else:
                         print("AI: (Tool execution completed, but no further text response)")
-                        # 応答がない場合も履歴には残す (必要に応じて)
+                        # Even if there's no response, keep it in history (if necessary)
                         # messages.append({"role": "assistant", "content": None})
 
 
                 elif ai_response_content:
-                    # ツール呼び出しがなく、テキスト応答があった場合
+                    # If there was no tool call and a text response occurred
                     print(f"AI: {ai_response_content}")
-                    # 応答は既に追加済みだが、save_memory=True で LLMClient 側で保存する場合
-                    if self.memory: # LLMClient にメモリがあるか確認
+                    # Response is already added, but if saving on LLMClient side with save_memory=True
+                    if self.memory: # Check if LLMClient has memory
                        self.memory.save_context({"input": user_input}, {"output": ai_response_content})
 
 
             except Exception as e:
                 print(f"An error occurred during interaction: {e}")
                 traceback.print_exc()
-                # エラーが発生した場合、ループを継続するかどうかは要検討
+                # If an error occurs, whether to continue the loop needs consideration
 
-        # ループ終了後のクリーンアップ
+        # Cleanup after loop ends
         if self._google_api_key:
             genai.disconnect()
-            print("ボットをサーバーから切断しました。")
+            print("Disconnected the bot from the server.")
 
 
-    # run メソッドを修正して、インタラクティブループを呼び出すようにする (既存の処理はコメントアウト)
+    # Modify the run method to call the interactive loop (existing processing is commented out)
     async def run(self):
-        """メイン実行関数 - インタラクティブループを開始"""
+        """Main execution function - Start interactive loop"""
         await self.run_interactive_loop()
 
-        # --- 既存のrunの内容 (コメントアウト) ---
-        # # サーバー接続確認とボット召喚
+        # --- Existing run content (commented out) ---
+        # # Server connection check and bot summoning
         # server_active = await self.check_server_and_join()
         # if not server_active:
-        #     print("サーバーに接続できないため、終了します")
+        #     print("Cannot connect to server, exiting")
         #     return
-        # # ... (既存のステータス表示、スキルリスト表示など) ...
-        # # 終了時の処理（tryの外で実行）
+        # # ... (Existing status display, skill list display, etc.) ...
+        # # Processing at termination (executed outside try)
         # if self.discovery:
         #     self.discovery.disconnect_bot()
-        #     print("ボットをサーバーから切断しました")
-        # --- コメントアウト終了 ---
+        #     print("Disconnected the bot from the server")
+        # --- End commented out ---
 
 
 # Example Usage (Optional - illustrating tool calling)
@@ -478,7 +478,7 @@ if __name__ == '__main__':
         client.clear_memory() # Start with fresh memory for the example
 
         print("--- Tool Calling Example (OpenAI) ---")
-        # ダミーのツール定義
+        # Dummy tool definition
         tools_definition = [
             {
                 "type": "function",
@@ -508,24 +508,24 @@ if __name__ == '__main__':
             service="openai",
             model="gpt-3.5-turbo", # Or a model that supports tool calling well
             tools=tools_definition
-            # save/use_memory は False のまま
+            # save/use_memory remains False
         )
 
         print(f"AI Response: {tool_response}")
 
-        # ツール呼び出しがあった場合の処理例 (実際にはツールを実行し結果を返す)
+        # Example of processing when a tool call occurred (actually executes the tool and returns the result)
         if tool_response.get('tool_calls'):
             print("\nLLM requested tool calls:")
             for call in tool_response['tool_calls']:
                 print(f"  ID: {call['id']}, Function: {call['function']['name']}, Arguments: {call['function']['arguments']}")
-            # ここで実際に get_current_weather(location="Boston, MA") を呼び出し、
-            # その結果を次の get_response 呼び出し時に tool ロールで渡す必要がある
+            # Here, actually call get_current_weather(location="Boston, MA"),
+            # and its result needs to be passed with a tool role during the next get_response call
 
-        # メモリの内容を確認
+        # Check memory content
         print("\n--- Current Memory ---")
         print(client.get_memory_string())
 
-        # メモリをクリア
+        # clear memory
         client.clear_memory()
         print("\n--- Memory After Clearing ---")
         print(client.get_memory_string())

@@ -1,37 +1,37 @@
-from discovery import Discovery
-from autoggen import Auto_gen
+from discovery.discovery import Discovery
+from discovery.autoggen import Auto_gen
 import asyncio
-import traceback # トレースバック取得のため
+import traceback # For getting tracebacks
 
 class DiscoveryMain:
     def __init__(self):
-        # Discoveryインスタンスを作成
+        # Create Discovery instance
         self.discovery = Discovery()
         self.auto_gen = Auto_gen(self.discovery)
         self.skills = None
 
     async def run(self):
-        """メイン実行関数"""
-        # サーバー接続確認とボット召喚
+        """Main execution function"""
+        # Check server connection and summon bot
         server_active = await self.discovery.check_server_and_join()
         
         if not server_active:
-            print("サーバーに接続できないため、終了します")
+            print("Cannot connect to server, exiting")
             return
-        await self.auto_gen.main(message="貴方の目標は、ネザーに到達することです。黒曜石を採掘してネザーゲートを作成しましょう！")
+        await self.auto_gen.main(message="Your goal is to reach the Nether. Mine obsidian and create a Nether portal!")
 
-        # 終了時の処理（tryの外で実行）
+        # Processing on exit (executed outside try)
         if self.discovery:
             self.discovery.disconnect_bot()
-            print("ボットをサーバーから切断しました")
+            print("Disconnected bot from server")
 
-# メイン処理
+# Main process
 if __name__ == "__main__":
     try:
-        # DiscoveryMainインスタンスを作成して実行
+        # Create and run DiscoveryMain instance
         discovery_main = DiscoveryMain()
         asyncio.run(discovery_main.run())
     except Exception as e:
-        print(f"エラーが発生しました: {e}")
+        print(f"An error occurred: {e}")
         import traceback
         traceback.print_exc()

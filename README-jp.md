@@ -1,4 +1,4 @@
-# Discovery: AutoGenによるカスタマイズ可能なMinecraftエージェント
+# Discovery: Customizable Minecraft Agents with AutoGen
 <div align="center">
 
 [English](README.md) | [日本語](README-jp.md)
@@ -11,141 +11,141 @@
 
 </div>
 
-## Discoveryについて
+## About Discovery
 
-Discoveryは、Minecraftの自動操作エージェントであり、[Mineflayer](https://github.com/PrismarineJS/mineflayer)によるBot操作と[AutoGen](https://github.com/microsoft/autogen)フレームワークによる高度なタスク実行・カスタマイズ性を組み合わせています。複数のAIエージェント（プランナー、コード実行、デバッガーなど）が連携し、ユーザーが設定した目標を達成するためにMinecraft内で自律的に行動します。
+Discovery is an autonomous Minecraft agent that combines Bot operation powered by [Mineflayer](https://github.com/PrismarineJS/mineflayer) with advanced task execution and customization provided by the [AutoGen](https://github.com/microsoft/autogen) framework. Multiple AI agents (planner, code execution, debugger, etc.) collaborate to autonomously act within Minecraft to achieve user-defined goals.
 
-### 主な特徴
+### Key Features
 
-- **AutoGen統合**: 複数のAIエージェントが協調してタスクを計画、実行、デバッグします。
-- **Mineflayerベース**: 実績のあるMineflayerライブラリを使用してMinecraft Botを操作します。
-- **エージェントカスタマイズ**: 各エージェントのプロンプト (`discovery/autoggen.py` 内) を変更することで、動作や役割を調整可能。
-- **モデルの柔軟性**: OpenAI、Google Geminiなど、AutoGenがサポートする様々なLLMモデルを利用可能（設定ファイルで変更）。
-- **Docker対応**: コンテナ化された環境で簡単にセットアップ・実行。
-- **スキル拡張性**: `discovery/skill/skills.py` にPython関数を追加することで、Botの能力を拡張可能。
+- **AutoGen Integration**: Multiple AI agents collaborate to plan, execute, and debug tasks.
+- **Mineflayer Based**: Operates Minecraft Bots using the proven Mineflayer library.
+- **Agent Customization**: Adjust agent behavior and roles by modifying each agent's prompt (located in `discovery/autoggen.py`).
+- **Model Flexibility**: Supports various LLM models compatible with AutoGen, such as OpenAI and Google Gemini (configurable in settings).
+- **Docker Support**: Easy setup and execution in a containerized environment.
+- **Skill Extensibility**: Extend Bot capabilities by adding new Python functions to `discovery/skill/skills.py`.
 
-## Dockerでのインストール
+## Installation with Docker
 
-DiscoveryはDocker上で動作し、プラットフォームに依存しないセットアップを実現します。
+Discovery runs on Docker, providing a platform-independent setup.
 
-### 前提条件
+### Prerequisites
 
-- [Docker](https://www.docker.com/products/docker-desktop/)とDocker Compose
-- Minecraft Java Edition（バージョン1.19.0推奨）
-- OpenAI APIキーまたは他の対応LLMプロバイダーのAPIキー
+- [Docker](https://www.docker.com/products/docker-desktop/) and Docker Compose
+- Minecraft Java Edition (version 1.19.0 recommended)
+- OpenAI API key or an API key from another supported LLM provider
 
-### セットアップ手順
+### Setup Steps
 
-1.  **リポジトリのクローン**
+1.  **Clone the repository**
     ```bash
     git clone https://github.com/Mega-Gorilla/Discovery.git
     cd Discovery
     ```
 
-2.  **環境変数の設定**
+2.  **Configure environment variables**
     ```bash
     cp .env.example .env
     ```
 
-    `.env`ファイルを編集し、APIキーとMinecraft接続情報を入力します。
+    Edit the `.env` file and enter your API keys and Minecraft connection information.
     ```dotenv
     # LLM API Keys
     OPENAI_API_KEY=your_openai_api_key_here
-    GOOGLE_API_KEY=your_google_api_key_here # 必要に応じて
+    GOOGLE_API_KEY=your_google_api_key_here # if needed
 
-    # Minecraft接続情報 (Minecraftをホストマシンで実行する場合)
-    MINECRAFT_PORT=25565 # MinecraftクライアントがLAN公開時に使用するポート (後で変更)
-    MINECRAFT_HOST=host.docker.internal # Dockerからホストマシン上のMinecraftに接続する場合
-    MINECRAFT_VERSION=1.19 # Minecraftのバージョン
+    # Minecraft connection info (if running Minecraft on the host machine)
+    MINECRAFT_PORT=25565 # Port used by Minecraft client when opened to LAN (will change later)
+    MINECRAFT_HOST=host.docker.internal # To connect to Minecraft on the host machine from Docker
+    MINECRAFT_VERSION=1.19 # Minecraft version
 
-    # Bot Viewer & Web Inventory Ports (変更可能)
+    # Bot Viewer & Web Inventory Ports (can be changed)
     PRISMARINE_VIEWER_PORT=3000
     WEB_INVENTORY_PORT=3001
     ```
-    **注意:** `MINECRAFT_PORT` は、後述するMinecraftのLAN公開時に表示されるポート番号に合わせて**再度編集が必要**になります。
+    **Note:** `MINECRAFT_PORT` will need to be **edited again** to match the port number displayed when Minecraft is opened to LAN, as described later.
 
-3.  **Minecraftモッドのインストール (任意だが推奨)**
+3.  **Install Minecraft Mods (optional but recommended)**
 
-    必須ではありませんが、以下のModを導入するとBotの動作が安定し、デバッグが容易になります。
-    インストール方法については以下を参照にしてください。
+    Although not strictly necessary, installing the following mods will stabilize the Bot's operation and facilitate debugging.
+    Refer to the following for installation instructions:
     [fabric_mods_install.ja.md](https://github.com/Mega-Gorilla/Discovery/blob/main/docs/fabric_mods_install.ja.md)
 
-4.  **Dockerコンテナのビルドと起動**
+4.  **Build and start Docker containers**
     ```bash
     docker-compose up -d --build
     ```
-    これにより、必要な依存関係を含むDockerイメージがビルドされ、コンテナがバックグラウンドで起動します。
+    This will build the Docker images with the necessary dependencies and start the containers in the background.
 
-5.  **Minecraftの起動とLAN公開**
-    - ホストマシンでMinecraftクライアントをFabricプロファイル（Modを使用する場合）またはバニラで起動します。
-    - クリエイティブモード、ピースフル難易度で新しいワールドを作成（または既存のワールドをロード）します。
-    - Escキーを押して「LANに公開」を選択します。
-    - チートを有効にして「LANワールドを開始」をクリックします。
-    - **重要:** チャット欄に表示される**ポート番号**（例: `ポート 51234 でローカルゲームがホストされました`）をメモしてください。
+5.  **Start Minecraft and open to LAN**
+    - Start the Minecraft client on your host machine using a Fabric profile (if using mods) or vanilla.
+    - Create a new world (or load an existing one) in Creative mode with Peaceful difficulty.
+    - Press the Esc key and select "Open to LAN".
+    - Enable Cheats and click "Start LAN World".
+    - **Important:** Note the **port number** displayed in the chat (e.g., `Local game hosted on port 51234`).
 
-6.  **`.env`ファイルのポート番号更新**
-    - メモしたポート番号を `.env` ファイルの `MINECRAFT_PORT` の値に設定します。
-    - **Dockerコンテナの再起動が必要です:**
+6.  **Update port number in `.env` file**
+    - Set the noted port number as the value for `MINECRAFT_PORT` in your `.env` file.
+    - **A Docker container restart is required:**
       ```bash
-      docker-compose restart discovery # 'discovery' は docker-compose.yml で定義されたサービス名
+      docker-compose restart discovery # 'discovery' is the service name defined in docker-compose.yml
       ```
 
-## エージェントのカスタマイズ
+## Customizing Agents
 
-AutoGenエージェントの動作は、主にシステムメッセージ（プロンプト）を変更することでカスタマイズできます。
+The behavior of AutoGen agents can be customized primarily by modifying their system messages (prompts).
 
-1.  **プロンプトの編集**:
-    - `discovery/autoggen.py` ファイルを開きます。
-    - `load_agents` メソッド内に各エージェント（`MineCraftPlannerAgent`, `CodeExecutionAgent`, `CodeDebuggerAgent` など）の定義があります。
-    - 各エージェントの `system_message` パラメータの内容を編集することで、そのエージェントの役割、指示、制約などを変更できます。
+1.  **Edit Prompts**:
+    - Open the `discovery/autoggen.py` file.
+    - Definitions for each agent (`MineCraftPlannerAgent`, `CodeExecutionAgent`, `CodeDebuggerAgent`, etc.) are located within the `load_agents` method.
+    - By editing the content of each agent's `system_message` parameter, you can change its role, instructions, constraints, and more.
 
-2.  **スキルの追加**:
-    - Botに新しい能力を追加したい場合は、`discovery/skill/skills.py` に新しいPythonメソッド（関数）を実装します。
-    - `autoggen.py` の `CodeExecutionAgent` や `CodeDebuggerAgent` が新しいスキルを認識できるように、必要に応じてプロンプトやツール定義を更新します。
+2.  **Add Skills**:
+    - If you want to add new capabilities to the Bot, implement new Python methods (functions) in `discovery/skill/skills.py`.
+    - Update prompts and tool definitions as necessary so that `CodeExecutionAgent` and `CodeDebuggerAgent` in `autoggen.py` recognize the new skills.
 
-3.  **コンテナの再ビルド**:
-    - Pythonコード (`.py` ファイル) を変更した場合、変更を反映させるためにDockerコンテナの再ビルドが必要です。
+3.  **Rebuild Containers**:
+    - If you modify Python code (`.py` files), you need to rebuild the Docker containers for the changes to take effect.
       ```bash
       docker-compose up -d --build
       ```
 
-## Discoveryの実行
+## Running Discovery
 
-セットアップとカスタマイズが完了したら、Discoveryを実行できます。
+Once setup and customization are complete, you can run Discovery.
 
-1.  **ターミナルでコンテナ内に入る**:
+1.  **Enter the container in the terminal**:
     ```bash
     docker-compose exec discovery /bin/bash
-    # または docker exec -it <container_id_or_name> /bin/bash
+    # Or docker exec -it <container_id_or_name> /bin/bash
     ```
 
-2.  **AutoGenスクリプトの実行**:
-    コンテナ内で以下のコマンドを実行します。
+2.  **Execute the AutoGen script**:
+    Run the following command inside the container.
     ```bash
-    python -m discovery.main # または python discovery/main.py
+    python -m discovery.main # Or python discovery/main.py
     ```
 
-   これにより、AutoGenのフレームワークが起動し、各エージェントが連携してタスクを開始します。
-   - まず、Minecraftサーバーへの接続が行われます。
-   - その後、ユーザーが設定した目標（現在は `autoggen.py` の `main` 関数内で定義されている可能性があります。将来的に対話的に設定できるようになるかもしれません）に基づいて、エージェントたちが計画、コード生成、実行、デバッグのサイクルを開始します。
-   - コンソールには、各エージェントの発言やコード実行の結果が表示されます。
+    This will start the AutoGen framework, and each agent will begin tasks in cooperation.
+    - First, a connection to the Minecraft server will be established.
+    - Afterwards, based on the user-defined goals (currently likely defined within the `main` function of `autoggen.py`; interactive setup might be available in the future), the agents will begin the cycle of planning, code generation, execution, and debugging.
+    - The console will display the utterances of each agent and the results of code execution.
 
-3.  **Botの視覚的確認 (任意)**:
-    `.env` ファイルで設定したポート（デフォルト: 3000）で Prismarine Viewer が起動します。ブラウザで `http://localhost:3000` (またはDockerが動作しているマシンのIP) にアクセスすると、Botの視点を確認できます。
+3.  **Visual confirmation of the Bot (optional)**:
+    The Prismarine Viewer will start on the port configured in the `.env` file (default: 3000). You can view the Bot's perspective by accessing `http://localhost:3000` (or the IP address of the machine running Docker) in your browser.
 
-## 重要な注意点
+## Important Notes
 
-- Minecraftクライアントはホストマシンで実行し、LANに公開する必要があります。
-- 必ずMinecraftを起動してLANに公開し、`.env` の `MINECRAFT_PORT` を更新してから、Discoveryを実行してください。
-- 接続問題が発生した場合は以下を確認：
-  - ファイアウォールの設定
-  - `.env`ファイルの`MINECRAFT_PORT`がMinecraftのLANポートと一致していること
-  - Dockerのネットワーク設定 (`host.docker.internal` がホストマシンを指しているか)
-- Modを使用する場合は、バージョンがMinecraft本体やFabric Loaderと互換性があることを確認してください。
-- AutoGenエージェントのプロンプトを変更した場合、期待通りの動作をするかテストが必要です。
+- The Minecraft client must be run on the host machine and opened to LAN.
+- Always start Minecraft, open it to LAN, update `MINECRAFT_PORT` in `.env`, and then run Discovery.
+- If connection issues occur, check the following:
+  - Firewall settings
+  - That the `MINECRAFT_PORT` in the `.env` file matches Minecraft's LAN port
+  - Docker network settings (whether `host.docker.internal` points to the host machine)
+- If using mods, ensure that their versions are compatible with Minecraft itself and Fabric Loader.
+- If you change the prompts of AutoGen agents, testing is required to ensure they behave as expected.
 
-## ライセンス
+## License
 
-このプロジェクトは[Research and Development License - Non-Commercial Use Only](LICENSE)の下で提供されています。
+This project is provided under the [Research and Development License - Non-Commercial Use Only](LICENSE).
 
-**免責事項**: このプロジェクトは研究目的専用であり、公式製品ではありません。 
+**Disclaimer**: This project is for research purposes only and is not an official product.

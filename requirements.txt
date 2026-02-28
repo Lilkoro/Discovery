@@ -7,3 +7,5 @@ python-dotenv
 google-generativeai
 openai
 langchain
+langchain-community
+ollama

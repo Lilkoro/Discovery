@@ -1,29 +1,29 @@
-# MineCraft Mod Install Gide
+# Minecraft Mod Install Guide
 
-Discoveryを動作させるには、FabicによるModインストールを推奨しています
+To run Discovery, we recommend installing mods with Fabric.
 
-## Fabric のインストール
+## Installing Fabric
 
-1. [fabic](https://fabricmc.net/use/installer/)よりインストーラーをダウンロードし、Fabicをインストールします
-1. ダウンロードした実行ファイルを実行します
-1. 「クライアント」➛ Minecraftバージョンにて「1.19」を選択します(1.20.6まで対応しているはずだが、未確認)
-1. 「インストール」を押し、Fabricをインストールします。
+1. Download the installer from [Fabric](https://fabricmc.net/use/installer/) and install Fabric.
+1. Run the downloaded executable file.
+1. Select "Client" ➛ "1.19" for the Minecraft version (it should support up to 1.20.6, but this is unconfirmed).
+1. Click "Install" to install Fabric.
 
-## Mod の導入
+## Installing Mods
 
-1. 「Win」+「R」で「ファイル名を設定して実行」を開き「%appdata%」と入力し「OK」を押します。
-1. アプリケーションフォルダ内の「.minecraft」➛ 「mods」を開きます。
-1. 以下のModをダウンロードし、modsフォルダーに保存します。
+1. Open "Run" by pressing "Win" + "R", type "%appdata%", and press "OK".
+1. Open ".minecraft" ➛ "mods" inside the application folder.
+1. Download the following Mods and save them to the mods folder.
 
-   **注意: curseforgeリンクを開いた後、「Files」「All Games Version」を任意のバージョン(例1.19)に変更し適合したバージョンのjarファイルをダウンロードしてください**
+   **Note: After opening the curseforge link, change "Files" "All Games Version" to your desired version (e.g., 1.19) and download the compatible jar file.**
    - [Fabric API](https://www.curseforge.com/minecraft/mc-mods/fabric-api)
    - [CompleteConfig](https://www.curseforge.com/minecraft/mc-mods/completeconfig)
    - [Mod Menu](https://www.curseforge.com/minecraft/mc-mods/modmenu)
    - [Multiplayer Server Pause (Forge)](https://www.curseforge.com/minecraft/mc-mods/multiplayer-server-pause-forge)
 
-## 動作確認
+## Verifying Operation
 
-1. マインクラフトランチャーを起動します。
-1. Fabricの導入が完了していればMineCraft Java Editionのビルド選択に「Fabric-loader-your_version」が表示されます。
-1. Fabricビルドを選択して、「プレイ」を押します。警告が表示されますが「プレイ」を押します。
-1. MOD導入が完了していれば問題なく起動します。エラーが発生した場合、導入Modのバージョンを確認してください。
+1. Start the Minecraft Launcher.
+1. If Fabric has been successfully installed, "Fabric-loader-your_version" will appear in the Minecraft Java Edition build selection.
+1. Select the Fabric build and click "Play". A warning will appear, but click "Play" again.
+1. If the mods have been successfully installed, it should launch without problems. If an error occurs, please check the version of the installed mods.

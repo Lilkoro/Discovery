@@ -15,12 +15,12 @@
 	// Use 'forwardPorts' to make a list of ports inside the container available locally.
 	"forwardPorts": [7860, 7850, 3000],
 
-	// ボリュームマウントの設定を追加
+	// Add volume mount configuration
 	"mounts": [
 		"source=${localWorkspaceFolder},target=/app,type=bind,consistency=cached"
 	],
 
-	// コンテナ作成後のコマンド実行
+	// Command execution after container creation
 	"postCreateCommand": "[ ! -d /app/mineflayer ] && mkdir -p /app/mineflayer; cd /app/mineflayer && npm init -y"
 
 	// Configure tool-specific properties.
