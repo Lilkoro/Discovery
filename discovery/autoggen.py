@@ -123,6 +123,13 @@ class Auto_gen:
             base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
             model_info=model_info,
         )
+
+        self.model_client_pro = OpenAIChatCompletionClient(
+            model="gemini-2.5-pro",
+            api_key=google_api_key,
+            base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
+            model_info=model_info
+        )
         # Gemini 2.5 Flash-Lite (Fast Routing & Simple Tasks)
         self.model_client_lite = OpenAIChatCompletionClient(
             model="gemini-2.5-flash-lite",
@@ -293,7 +300,7 @@ class Auto_gen:
                 self.get_skill_summary_tool, 
                 self.get_skills_list_tool
             ],
-            model_client=self.model_client_flash, # Flash for coding
+            model_client=self.model_client_pro, # 🚀 Uniquement Pro pour le code complexe
             description="Agent that generates Python code to execute proposed tasks, runs it immediately, and reports results.",
             system_message="""
             You are a specialized AI agent that generates Python code to automate Minecraft Bot actions, **executes it immediately, and objectively reports the results.**
