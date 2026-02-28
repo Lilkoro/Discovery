@@ -2,6 +2,7 @@ from discovery.discovery import Discovery
 from discovery.autoggen import Auto_gen
 import asyncio
 import traceback # For fetching stacktraces
+import time
 
 class DiscoveryMain:
     def __init__(self):
@@ -27,11 +28,24 @@ class DiscoveryMain:
 
 # Main execution
 if __name__ == "__main__":
-    try:
-        # Create and run DiscoveryMain instance
-        discovery_main = DiscoveryMain()
-        asyncio.run(discovery_main.run())
-    except Exception as e:
-        print(f"An error occurred: {e}")
-        import traceback
-        traceback.print_exc()
+    print("\033[92mStarting Auto-Run Discovery Bot...\033[0m")
+    while True:
+        try:
+            # Create and run DiscoveryMain instance
+            discovery_main = DiscoveryMain()
+            asyncio.run(discovery_main.run())
+        except KeyboardInterrupt:
+            # Clean exit when user presses Ctrl+C
+            print("\n\033[93m[INTERRUPTED] Manual exit detected. Stopping auto-restart loop.\033[0m")
+            break
+        except Exception as e:
+            # Auto-Recover from any other error (API 429, Minecraft disconnect, random crashes)
+            print(f"\n\033[91m[CRASH DETECTED] An error occurred: {e}\033[0m")
+            import traceback
+            traceback.print_exc()
+            
+            # Wait before restarting to avoid spamming the server
+            wait_seconds = 15
+            print(f"\n\033[96m[AUTO-RESTART] Bot will attempt to reconnect and resume in {wait_seconds} seconds...\033[0m")
+            time.sleep(wait_seconds)
+            print("\033[92m[AUTO-RESTART] Restarting bot now...\033[0m\n")
