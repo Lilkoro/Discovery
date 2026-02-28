@@ -11,7 +11,7 @@ from autogen_agentchat.agents import AssistantAgent
 from autogen_agentchat.conditions import ExternalTermination, TextMentionTermination
 from autogen_agentchat.teams import SelectorGroupChat
 from autogen_agentchat.ui import Console
-from autogen_ext.models.gemini import GeminiChatCompletionClient
+from autogen_ext.models.openai import OpenAIChatCompletionClient
 from autogen_core.model_context import UnboundedChatCompletionContext
 from autogen_core.tools import FunctionTool
 from autogen_core.models import AssistantMessage, LLMMessage, ModelFamily
@@ -80,9 +80,11 @@ class Auto_gen:
         }
 
         # Use Gemini 2.5 Flash-Lite as the unified model backend for all agents.
-        self.model_client = GeminiChatCompletionClient(
-            model="gemini-2.5-flash-lite",
+        # Note: Google AI Studio provides an OpenAI-compatible endpoint at the v1beta base URL.
+        self.model_client = OpenAIChatCompletionClient(
+            model="gemini-2.5-flash",
             api_key=google_api_key,
+            base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
             model_info=model_info,
         )
         self.model_client_o1 = self.model_client

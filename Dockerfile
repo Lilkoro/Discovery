@@ -18,7 +18,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # ── ③ Python packages ──────────────────────────────────────────
-RUN pip install -U autogen-agentchat autogen-ext[openai] autogen-ext[gemini] autogen-agentchat[lmm]~=0.2 autogen-agentchat[gemini]~=0.2
+RUN pip install -U autogen-agentchat autogen-ext[openai] autogen-ext[gemini]
 
 WORKDIR /app
 COPY requirements.txt README.md ./
