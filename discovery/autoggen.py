@@ -64,6 +64,62 @@ class LimitedHistorySelectorGroupChat(SelectorGroupChat):
             history_str += f"[{source}]: {content}\n\n"
             
         return history_str
+        return history_str
+
+
+class RateLimitingClientWrapper:
+    """Wraps an AutoGen ChatCompletionClient to handle 429 RateLimitErrors seamlessly without crashing the GroupChat."""
+    def __init__(self, client):
+        self._client = client
+
+    @property
+    def model_info(self):
+        return self._client.model_info
+
+    @property
+    def actual_usage(self):
+        return getattr(self._client, "actual_usage", None)
+
+    async def create(self, *args, **kwargs):
+        while True:
+            try:
+                return await self._client.create(*args, **kwargs)
+            except Exception as e:
+                import re
+                if "429" in str(e) or "quota" in str(e).lower() or "RateLimitError" in str(e) or "RESOURCE_EXHAUSTED" in str(e):
+                    wait_time = 20
+                    match = re.search(r"retry in (\d+\.?\d*)s", str(e))
+                    if match:
+                        wait_time = max(wait_time, float(match.group(1)) + 1)
+                    print(f"\n\033[93m[QUOTA] API Rate Limit hit. Waiting {wait_time:.1f}s before retrying call inside client wrapper...\033[0m")
+                    await asyncio.sleep(wait_time)
+                else:
+                    raise
+
+    async def create_stream(self, *args, **kwargs):
+        while True:
+            try:
+                stream = self._client.create_stream(*args, **kwargs)
+                async for chunk in stream:
+                    yield chunk
+                return
+            except Exception as e:
+                import re
+                if "429" in str(e) or "quota" in str(e).lower() or "RateLimitError" in str(e) or "RESOURCE_EXHAUSTED" in str(e):
+                    wait_time = 20
+                    match = re.search(r"retry in (\d+\.?\d*)s", str(e))
+                    if match:
+                        wait_time = max(wait_time, float(match.group(1)) + 1)
+                    print(f"\n\033[93m[QUOTA] API Rate Limit hit. Waiting {wait_time:.1f}s before retrying stream inside client wrapper...\033[0m")
+                    await asyncio.sleep(wait_time)
+                else:
+                    raise
+
+    def count_tokens(self, *args, **kwargs):
+        return self._client.count_tokens(*args, **kwargs)
+
+    def remaining_tokens(self, *args, **kwargs):
+        return self._client.remaining_tokens(*args, **kwargs)
 
 
 class Auto_gen:
@@ -117,26 +173,26 @@ class Auto_gen:
         }
 
         # Gemini 2.5 Flash (Strategic Reasoning & Coding)
-        self.model_client_flash = OpenAIChatCompletionClient(
+        self.model_client_flash = RateLimitingClientWrapper(OpenAIChatCompletionClient(
             model="gemini-2.5-flash",
             api_key=google_api_key,
             base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
             model_info=model_info,
-        )
+        ))
 
-        self.model_client_pro = OpenAIChatCompletionClient(
+        self.model_client_pro = RateLimitingClientWrapper(OpenAIChatCompletionClient(
             model="gemini-2.5-pro",
             api_key=google_api_key,
             base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
             model_info=model_info
-        )
+        ))
         # Gemini 2.5 Flash-Lite (Fast Routing & Simple Tasks)
-        self.model_client_lite = OpenAIChatCompletionClient(
+        self.model_client_lite = RateLimitingClientWrapper(OpenAIChatCompletionClient(
             model="gemini-2.5-flash-lite",
             api_key=google_api_key,
             base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
             model_info=model_info,
-        )
+        ))
 
         # Use Flash as the default for reasoning tasks
         self.model_client = self.model_client_flash
@@ -421,32 +477,15 @@ class Auto_gen:
             max_history=8 # Even tighter window to stay under quotas
         )
 
-        while True:
-            try:
-                await Console(
-                    team.run_stream(task=message)
-                )
-                break # Exit loop if completed successfully
-            except Exception as e:
-                error_msg = str(e)
-                # Check for either direct RateLimitError or a wrapped quota error from AutoGen
-                if isinstance(e, RateLimitError) or "429" in error_msg or "quota" in error_msg.lower() or "RateLimitError" in error_msg:
-                    wait_time = 20 # Default retry time
-                    
-                    # Try to extract the retry delay from the error message (e.g., "retry in 17.3s")
-                    match = re.search(r"retry in (\d+\.?\d*)s", error_msg)
-                    if match:
-                        wait_time = float(match.group(1)) + 1 # Add safety buffer
-
-                    print(f"\n\033[93m[QUOTA] API Rate Limit hit. Waiting {wait_time:.1f}s before retrying task...\033[0m")
-                    await asyncio.sleep(wait_time)
-                    print(f"\033[94mResuming task...\033[0m\n")
-                else:
-                    # Unrelated error, break out and show traceback
-                    print(f"\n\033[91m[ERROR] An unexpected error occurred in AutoGen: {e}\033[0m")
-                    import traceback
-                    traceback.print_exc()
-                    break
+        try:
+            await Console(
+                team.run_stream(task=message)
+            )
+        except Exception as e:
+            # Check if it was an unhandled error inside
+            print(f"\n\033[91m[ERROR] An unexpected error occurred in AutoGen: {e}\033[0m")
+            import traceback
+            traceback.print_exc()
     
     def load_prompt_template(self, prompt_name: str) -> str:
         """Loads a YAML file from the prompts directory and returns the PromptTemplate as a string."""
