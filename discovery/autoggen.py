@@ -43,7 +43,23 @@ class LimitedHistorySelectorGroupChat(SelectorGroupChat):
         # Use only the last N messages for the selector's context
         if len(messages) > self._max_history:
             messages = messages[-self._max_history:]
-        return await super()._format_history(messages)
+        
+        # Optimization: Create lightweight versions of messages to save tokens.
+        # We strip detailed block/entity lists which the selector doesn't need to choose a speaker.
+        optimized_messages = []
+        for msg in messages:
+            # If msg has a 'content' attribute (like TextMessage)
+            if hasattr(msg, "content") and isinstance(msg.content, str):
+                # Strip long block lists and entity arrays from the selector's view
+                content = msg.content
+                content = re.sub(r"'(?:front|back|left|right|center)_blocks': \[.*?\]", "'blocks': [TRUNCATED]", content, flags=re.DOTALL)
+                content = re.sub(r"'nearby_entities': \[.*?\]", "'nearby_entities': [TRUNCATED]", content, flags=re.DOTALL)
+                # Clone or modify the message content for the selector only
+                # For safety, we just pass the modified text to the formatter
+                msg.content = content 
+            optimized_messages.append(msg)
+            
+        return await super()._format_history(optimized_messages)
 
 class Auto_gen:
     def __init__(self,discovery: Discovery) -> None:
@@ -406,7 +422,7 @@ class Auto_gen:
             model_client=self.model_client_flash, # Use Flash for more robust routing
             selector_prompt=selector_prompt,
             allow_repeated_speaker=True,
-            max_history=12 # Keep it tight (approx 10-12 messages is plenty for the selector)
+            max_history=8 # Even tighter window to stay under quotas
         )
 
         while True:
