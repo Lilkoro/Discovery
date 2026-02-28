@@ -44,22 +44,27 @@ class LimitedHistorySelectorGroupChat(SelectorGroupChat):
         if len(messages) > self._max_history:
             messages = messages[-self._max_history:]
         
-        # Optimization: Create lightweight versions of messages to save tokens.
+        # Build the history string manually to avoid polluting the original messages
         # We strip detailed block/entity lists which the selector doesn't need to choose a speaker.
-        optimized_messages = []
+        history_str = ""
         for msg in messages:
-            # If msg has a 'content' attribute (like TextMessage)
+            content = ""
+            # Safely check for content in different message types
             if hasattr(msg, "content") and isinstance(msg.content, str):
-                # Strip long block lists and entity arrays from the selector's view
                 content = msg.content
-                content = re.sub(r"'(?:front|back|left|right|center)_blocks': \[.*?\]", "'blocks': [TRUNCATED]", content, flags=re.DOTALL)
-                content = re.sub(r"'nearby_entities': \[.*?\]", "'nearby_entities': [TRUNCATED]", content, flags=re.DOTALL)
-                # Clone or modify the message content for the selector only
-                # For safety, we just pass the modified text to the formatter
-                msg.content = content 
-            optimized_messages.append(msg)
+                # Aggressive truncation for the selector (it only needs the gist of the message)
+                content = re.sub(r"'(?:front|back|left|right|center)_blocks': \[.*?\]", "'blocks': [REDACTED]", content, flags=re.DOTALL)
+                content = re.sub(r"'nearby_entities': \[.*?\]", "'entities': [REDACTED]", content, flags=re.DOTALL)
+                # If content is still too long, truncate it to avoid token explosion
+                if len(content) > 1500:
+                    content = content[:1500] + "... (truncated for selector)"
             
-        return await super()._format_history(optimized_messages)
+            # Identify sender (source)
+            source = getattr(msg, "source", "system")
+            history_str += f"[{source}]: {content}\n\n"
+            
+        return history_str
+
 
 class Auto_gen:
     def __init__(self,discovery: Discovery) -> None:
@@ -431,24 +436,26 @@ class Auto_gen:
                     team.run_stream(task=message)
                 )
                 break # Exit loop if completed successfully
-            except RateLimitError as e:
-                # Handle Google AI Studio / OpenAI Quota (429)
-                error_msg = str(e)
-                wait_time = 20 # Default retry time
-                
-                # Try to extract the retry delay from the error message (e.g., "retry in 17.3s")
-                match = re.search(r"retry in (\d+\.?\d*)s", error_msg)
-                if match:
-                    wait_time = float(match.group(1)) + 1 # Add safety buffer
-
-                print(f"\n\033[93m[QUOTA] API Rate Limit hit. Waiting {wait_time:.1f}s before retrying task...\033[0m")
-                await asyncio.sleep(wait_time)
-                print(f"\033[94mResuming task...\033[0m\n")
             except Exception as e:
-                print(f"\n\033[91m[ERROR] An unexpected error occurred in AutoGen: {e}\033[0m")
-                import traceback
-                traceback.print_exc()
-                break
+                error_msg = str(e)
+                # Check for either direct RateLimitError or a wrapped quota error from AutoGen
+                if isinstance(e, RateLimitError) or "429" in error_msg or "quota" in error_msg.lower() or "RateLimitError" in error_msg:
+                    wait_time = 20 # Default retry time
+                    
+                    # Try to extract the retry delay from the error message (e.g., "retry in 17.3s")
+                    match = re.search(r"retry in (\d+\.?\d*)s", error_msg)
+                    if match:
+                        wait_time = float(match.group(1)) + 1 # Add safety buffer
+
+                    print(f"\n\033[93m[QUOTA] API Rate Limit hit. Waiting {wait_time:.1f}s before retrying task...\033[0m")
+                    await asyncio.sleep(wait_time)
+                    print(f"\033[94mResuming task...\033[0m\n")
+                else:
+                    # Unrelated error, break out and show traceback
+                    print(f"\n\033[91m[ERROR] An unexpected error occurred in AutoGen: {e}\033[0m")
+                    import traceback
+                    traceback.print_exc()
+                    break
     
     def load_prompt_template(self, prompt_name: str) -> str:
         """Loads a YAML file from the prompts directory and returns the PromptTemplate as a string."""
