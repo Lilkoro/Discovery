@@ -6,10 +6,10 @@ from concurrent.futures import ThreadPoolExecutor
 class Skills:
     def __init__(self, discovery):
         """
-        Discoveryインスタンスを受け取り、そのプロパティを使用します
+        Receives the Discovery instance and uses its properties.
         
         Args:
-            discovery: Discoveryクラスのインスタンス
+            discovery: Instance of the Discovery class
         """
         self.discovery = discovery
         self.bot = discovery.bot
@@ -20,10 +20,10 @@ class Skills:
 
     async def get_bot_position(self):
         """
-        ボットの現在位置を取得します。座標はtuple[float, float, float]で返されます。
+        Gets the current position of the bot. Coordinates are returned as tuple[float, float, float].
 
         Returns:
-            tuple[float, float, float]: ボットの位置のx, y, z座標を含むtuple。 
+            tuple[float, float, float]: Tuple containing x, y, z coordinates of the bot's position. 
 
         Example:
             >>>result = get_bot_position()
@@ -37,15 +37,15 @@ class Skills:
     
     async def look_at_direction(self, direction):
         """
-        BOTが指定された方角を向きます。BotViewAgentと組み合わせて、BOTの周辺視界を確認する際に有効です。
+        Makes the BOT look in the specified direction. Useful in combination with BotViewAgent to check the BOT's field of view.
 
         Args:
-            direction (str): 方角 ('north', 'south', 'east', 'west', 'up', 'down')
+            direction (str): Direction ('north', 'south', 'east', 'west', 'up', 'down')
 
         Returns:
-            dict: 結果を含む辞書
-                - success (bool): 方向転換に成功した場合はTrue
-                - message (str): 結果メッセージ
+            dict: Dictionary containing the result
+                - success (bool): True if direction change was successful
+                - message (str): Result message
         """
         result = {
             "success": False,
@@ -53,12 +53,12 @@ class Skills:
         }
 
         try:
-            # 現在のヨーとピッチを取得
+            # Get current yaw and pitch
             current_yaw = self.bot.entity.yaw
             current_pitch = self.bot.entity.pitch
             
-            target_yaw = current_yaw # デフォルトは現在のヨー
-            target_pitch = 0.0 # デフォルトは水平
+            target_yaw = current_yaw # Default is current yaw
+            target_pitch = 0.0 # Default is horizontal
 
             direction_lower = direction.lower()
 
@@ -71,28 +71,28 @@ class Skills:
             elif direction_lower == 'west':
                 target_yaw = -math.pi / 2
             elif direction_lower == 'up':
-                target_pitch = math.pi / 2  # 真上
-                target_yaw = current_yaw # 上下を見る場合はヨーは維持
+                target_pitch = math.pi / 2  # Straight up
+                target_yaw = current_yaw # Maintain yaw when looking up/down
             elif direction_lower == 'down':
-                target_pitch = -math.pi / 2 # 真下
-                target_yaw = current_yaw # 上下を見る場合はヨーは維持
+                target_pitch = -math.pi / 2 # Straight down
+                target_yaw = current_yaw # Maintain yaw when looking up/down
             else:
-                result["message"] = f"無効な方角が指定されました: {direction}"
+                result["message"] = f"Invalid direction specified: {direction}"
                 self.bot.chat(result["message"])
                 return result
 
-            # bot.look は同期メソッドの可能性が高いが、念のため await するか確認
-            # Mineflayer の bot.look は通常同期ですが、javascript ライブラリ経由だと非同期の場合がある
-            # ここでは同期として扱う（もしエラーが出たら await self.bot.look(...) に変更）
+            # bot.look is likely synchronous, but verify if it needs await
+            # Mineflayer's bot.look is normally synchronous, but might be async via JS library
+            # Treating as synchronous here (if error occurs, change to await self.bot.look(...))
             self.bot.look(target_yaw, target_pitch)
             
             result["success"] = True
-            result["message"] = f"{direction.capitalize()} を向きました。"
-            # self.bot.chat(result["message"]) # 頻繁に呼ばれる可能性があるのでチャットは省略
+            result["message"] = f"Looked {direction.capitalize()}."
+            # self.bot.chat(result["message"]) # Omit chat as it may be called frequently
             return result
 
         except Exception as e:
-            result["message"] = f"{direction} を向く際にエラーが発生しました: {str(e)}"
+            result["message"] = f"Error occurred while looking {direction}: {str(e)}"
             self.bot.chat(result["message"])
             import traceback
             traceback.print_exc()
@@ -100,95 +100,95 @@ class Skills:
         
     async def _get_surrounding_blocks(self, position=None, x_distance=10, y_distance=10, z_distance=10):
         """
-        指定位置周囲のブロックを取得します。広い範囲でブロック情報を取得する際に有効です。
+        Gets blocks surrounding the specified position. Useful for acquiring block info over a wide area.
 
         Args:
-            position (Vec3 or tuple): 探索の中心位置（未指定の場合はBOTの位置）。タプルでも可。
-            x_distance (int): X方向の探索距離（デフォルト: 10）
-            y_distance (int): Y方向の探索距離（デフォルト: 10）
-            z_distance (int): Z方向の探索距離（デフォルト: 10）
+            position (Vec3 or tuple): Center position for search (BOT position if unspecified). Tuple is also allowed.
+            x_distance (int): Search distance in X direction (Default: 10)
+            y_distance (int): Search distance in Y direction (Default: 10)
+            z_distance (int): Search distance in Z direction (Default: 10)
 
         Returns:
-            list: 周囲のブロック情報のリスト（各要素は{'name': ブロック名, 'position': 位置}の辞書）
+            list: List of surrounding block information (each element is a dict {'name': block_name, 'position': position})
 
-        動作の詳細:
-            - 小範囲: 全ブロックを取得
-            - 大範囲: 3つのゾーンに分けて最適化
-              - 近距離（半径5ブロック以内）: 全ブロック取得
-              - 中距離（半径5-10ブロック）: 2ブロックごとに取得
-              - 遠距離（半径10ブロック以上）: 3ブロックごとに取得
-            - バッチ処理でブロック取得を最適化（500ブロックずつ）
-            - 並列処理でフィルタリングを高速化
+        Operation details:
+            - Small range: Fetches all blocks
+            - Large range: Optimized by dividing into 3 zones
+              - Near distance (within 5 blocks radius): Fetch all blocks
+              - Medium distance (5-10 blocks radius): Fetch every 2 blocks
+              - Far distance (10+ blocks radius): Fetch every 3 blocks
+            - Block fetching optimized via batching (500 blocks at a time)
+            - Filtering sped up via parallel processing
         """
-        Vec3 = require('vec3') # Vec3 を利用可能にする
+        Vec3 = require('vec3') # Make Vec3 available
 
-        self.bot.chat(f"{x_distance}x{y_distance}x{z_distance}の範囲でブロックを取得します。")
-        # デフォルト値の設定
+        self.bot.chat(f"Fetching blocks within a {x_distance}x{y_distance}x{z_distance} area.")
+        # Set default values
         if position is None:
             position = self.bot.entity.position
 
-        # --- 型チェックと変換を追加 --- 
+        # --- Add type checking and conversion --- 
         if isinstance(position, tuple) and len(position) == 3:
             try:
                 position = Vec3(position[0], position[1], position[2])
             except Exception as e:
-                self.bot.chat("座標の型変換エラーが発生しました。")
-                return [] # エラー時は空リストを返す
-        elif not hasattr(position, 'offset'): # offset メソッドがない場合 (Vec3 でない場合)
-            self.bot.chat("無効な座標オブジェクトタイプです。")
-            return [] # エラー時は空リストを返す
-        # --- ここまで追加 --- 
+                self.bot.chat("Coordinate type conversion error occurred.")
+                return [] # Return empty list on error
+        elif not hasattr(position, 'offset'): # If no offset method (not Vec3)
+            self.bot.chat("Invalid coordinate object type.")
+            return [] # Return empty list on error
+        # --- End addition --- 
 
         x_dist = x_distance
         y_dist = y_distance
         z_dist = z_distance
         
-        # 距離に応じたサンプリングレートの設定
+        # Set sampling rate based on distance
         coords = []
         total_vol = (2 * x_dist + 1) * (2 * y_dist + 1) * (2 * z_dist + 1)
         
-        # 距離に応じたサンプリング（大きな範囲では間引きを行う）
-        if total_vol > 8000:  # 範囲が大きい場合
-            # 近距離は密に、遠距離は疎に
-            near_dist = 5  # 近距離の境界
+        # Sampling based on distance (thinning out for large ranges)
+        if total_vol > 8000:  # For large ranges
+            # Dense close up, sparse far away
+            near_dist = 5  # Near distance boundary
             
-            # 近距離ゾーン（完全取得）
+            # Near zone (Fetch complete)
             for x in range(-min(near_dist, x_dist), min(near_dist, x_dist) + 1):
                 for y in range(-min(near_dist, y_dist), min(near_dist, y_dist) + 1):
                     for z in range(-min(near_dist, z_dist), min(near_dist, z_dist) + 1):
                         coords.append(position.offset(x, y, z))
             
-            # 中間ゾーン（2ブロックごとに取得）
+            # Mid zone (Fetch every 2 blocks)
             mid_dist = 10
             if x_dist > near_dist or y_dist > near_dist or z_dist > near_dist:
                 for x in range(-min(mid_dist, x_dist), min(mid_dist, x_dist) + 1, 2):
                     for y in range(-min(mid_dist, y_dist), min(mid_dist, y_dist) + 1, 2):
                         for z in range(-min(mid_dist, z_dist), min(mid_dist, z_dist) + 1, 2):
-                            # 近距離ゾーンに含まれないブロックのみ追加
+                            # Append blocks not in near zone
                             if abs(x) > near_dist or abs(y) > near_dist or abs(z) > near_dist:
                                 coords.append(position.offset(x, y, z))
             
-            # 遠距離ゾーン（3ブロックごとに取得）
+            # Far zone (Fetch every 3 blocks)
             if x_dist > mid_dist or y_dist > mid_dist or z_dist > mid_dist:
                 for x in range(-x_dist, x_dist + 1, 3):
                     for y in range(-y_dist, y_dist + 1, 3):
                         for z in range(-z_dist, z_dist + 1, 3):
-                            # 中間ゾーンに含まれないブロックのみ追加
+                            # Append blocks not in mid zone
                             if abs(x) > mid_dist or abs(y) > mid_dist or abs(z) > mid_dist:
                                 coords.append(position.offset(x, y, z))
             
         else:
-            # 範囲が小さい場合は全ブロック取得
+            # Fetch all blocks if range is small
             for x in range(-x_dist, x_dist + 1):
                 for y in range(-y_dist, y_dist + 1):
                     for z in range(-z_dist, z_dist + 1):
                         coords.append(position.offset(x, y, z))
 
-        # バッチサイズの決定（大量のリクエストを分割して処理）
+        # Determine batch size (split large requests)
         batch_size = 500
         all_blocks = []
         
-        # バッチ処理
+        # Batch processing
         for i in range(0, len(coords), batch_size):
             batch_end = min(i + batch_size, len(coords))
             batch = coords[i:batch_end]
@@ -196,14 +196,14 @@ class Skills:
             async def _get_block_async(position):
                 return self.bot.blockAt(position)
             
-            # バッチ内のブロック取得を並列実行
+            # Run block fetching in parallel within batch
             batch_tasks = [_get_block_async(pos) for pos in batch]
             batch_results = await asyncio.gather(*batch_tasks)
             all_blocks.extend(batch_results)
         
         try:
             def chunks(lst, n):
-                """リストをn個のチャンクに分割"""
+                """Split list into n chunks"""
                 for i in range(0, len(lst), n):
                     yield lst[i:i + n]
             
@@ -211,23 +211,23 @@ class Skills:
                 return [{'name': block.name, 'position': {'x': block.position.x, 'y': block.position.y, 'z': block.position.z}} 
                         for block in chunk if block and block.type != 0]
             
-            # CPUコア数に基づいて最適なチャンクサイズを計算
+            # Calculate optimal chunk size based on CPU cores
             import os
             cpu_count = os.cpu_count() or 4
             chunk_size = max(100, len(all_blocks) // (cpu_count * 2))
             block_chunks = list(chunks(all_blocks, chunk_size))
             
-            # マルチスレッドでフィルタリングを実行
+            # Run filtering on multiple threads
             with ThreadPoolExecutor(max_workers=cpu_count) as executor:
                 filtered_chunks = list(executor.map(process_chunk, block_chunks))
             
-            # 結果を結合
+            # Combine results
             surrounding_blocks = []
             for chunk in filtered_chunks:
                 surrounding_blocks.extend(chunk)
                 
         except ImportError:
-            # 並列処理ライブラリがインポートできない場合は標準的なリスト内包表記を使用
+            # Use standard list comprehension if parallel processing library cannot be imported
             surrounding_blocks = [
                 {'name': block.name, 'position': {'x': block.position.x, 'y': block.position.y, 'z': block.position.z}}
                 for block in all_blocks
@@ -239,21 +239,21 @@ class Skills:
     
     async def get_inventory_counts(self):
         """
-        ボットのインベントリ内の各アイテムの名前と数を辞書形式で返します。
+        Returns the name and count of each item in the bot's inventory in dictionary format.
 
         Returns:
-            dict: キーがアイテム名、値がその数量の辞書
+            dict: Dictionary where key is item name and value is quantity
             
         Example:
             >>> get_inventory_counts()
             {'birch_planks': 1, 'dirt': 1}
         """
-        print("インベントリ内のアイテムを取得します。")
+        print("Fetching items from inventory.")
         inventory_counts = {}
         
-        # インベントリ内の全アイテムをループ
+        # Loop over all items in inventory
         for item in self.bot.inventory.items():
-            # アイテム名が既に辞書にある場合は数を加算、なければ新規追加
+            # Add to count if item name already exists, otherwise add new
             if item.name in inventory_counts:
                 inventory_counts[item.name] += item.count
             else:
@@ -264,14 +264,14 @@ class Skills:
     
     async def get_nearest_block(self, block_name, max_distance=1000):
         """
-        BOTの周囲で指定されたブロック名のブロックを検索し、最も近いブロックの情報を返します。
+        Searches for a specified block near the BOT and returns info for the nearest block.
         
         Args:
-            block_name (str): 探すブロック名 (例: "oak_log")
-            max_distance (int): 探索する最大ブロック数(デフォルトは1000)
-            canMove (bool): 到達可能なブロックのみを返すか。デフォルトはTrue
+            block_name (str): Block name to search for (e.g. "oak_log")
+            max_distance (int): Max block distance to search (default 1000)
+            canMove (bool): Return only reachable blocks. Default is True
         Returns:
-            Block: 最も近いブロック、見つからない場合はNone
+            Block: Nearest block, or None if not found
         
         Example:
             >>> get_nearest_block('oak_log')
@@ -302,15 +302,15 @@ class Skills:
             -83
         """
         try:
-            # ブロックのIDを取得
+            # Get Block ID
             block_id = None
             if hasattr(self.bot.registry, 'blocksByName') and block_name in self.bot.registry.blocksByName:
                 block_id = self.bot.registry.blocksByName[block_name].id
             else:
-                print(f"get_nearest_blockを実行しましたが、ブロック '{str(block_name)}' はminecraftのブロック名では見つかりません")
+                print(f"Executed get_nearest_block, but block '{str(block_name)}' was not found in minecraft block names")
                 return None
                 
-            # ブロックを検索
+            # Search for blocks
             blocks_pos = self.bot.findBlocks({
                 'point': self.bot.entity.position,
                 'matching': block_id,
@@ -319,7 +319,7 @@ class Skills:
             })
             distance_min = None
             block_min = None
-            # 本当に距離計算できてる？
+            # Are we actually calculating distance correctly?
             for block_pos in blocks_pos:
                 block = self.bot.blockAt(block_pos)
                 distance = self.bot.entity.position.distanceTo(block_pos)
@@ -331,35 +331,35 @@ class Skills:
             return block_min
             
         except Exception as e:
-            print(f"ブロック検索中にエラーが発生しました: {str(e)}")
+            print(f"An error occurred while searching for blocks: {str(e)}")
             import traceback
             traceback.print_exc()
             return None
     
     async def get_nearest_free_space(self, X_size=1, Y_size=1, Z_size=1, distance=15, y_offset=0):
         """
-        BOTの周囲で指定されたサイズの空きスペース（上部が空気で下部が固体ブロック）を見つけます。
+        Finds empty space of the specified size (air above, solid block below) near the BOT.
         
         Args:
-            X_size (int): 探す空きスペースのXサイズ。(Minecraftのブロックの幅)
-            Y_size (int): 探す空きスペースのYサイズ。(Minecraftのブロックの高さ)
-            Z_size (int): 探す空きスペースのZサイズ。(Minecraftのブロックの幅)
-            distance (int): 探索する最大距離。デフォルトは8。
-            y_offset (int): 見つかった空きスペースに適用するY座標オフセット。デフォルトは0。
+            X_size (int): X size of the free space to find. (Minecraft block width)
+            Y_size (int): Y size of the free space to find. (Minecraft block height)
+            Z_size (int): Z size of the free space to find. (Minecraft block width)
+            distance (int): Max distance to search. Default is 8.
+            y_offset (int): Y-coordinate offset to apply to the found free space. Default is 0.
             
         Returns:
-            Vec3: 見つかった空きスペースの南西角の座標。見つからない場合はボットの足元の座標を返します。
+            Vec3: South-west corner coordinates of the found free space. Returns the coordinates at bot's feet if none found.
         
         Example:
             >>> free_space = skills.get_nearest_free_space(2, 10)
-            >>> print(f"見つかった空きスペース: x={free_space.x}, y={free_space.y}, z={free_space.z}")
+            >>> print(f"Found free space: x={free_space.x}, y={free_space.y}, z={free_space.z}")
         """
-        self.bot.chat("空きスペースを検索します。")
+        self.bot.chat("Searching for free space.")
         try:
             Vec3 = require('vec3')
             result = None
         
-            # 空気ブロックを検索
+            # Search for air blocks
             empty_pos = self.bot.findBlocks({
                 'point': self.bot.entity.position,
                 'matching': self.mcdata.blocksByName['air'].id,
@@ -367,32 +367,32 @@ class Skills:
                 'count': 1000
             })
             
-            # 各空気ブロックについて、指定されたサイズの空きスペースを確認
+            # Check for specified sized free space for each air block
             for pos in empty_pos:
                 empty = True
 
-                # ボットの位置と同じ場合はスキップ
+                # Skip if same as bot's position
                 bot_pos = self.bot.blockAt(self.bot.entity.position).position
                 if (pos.x == bot_pos.x and pos.y == bot_pos.y and pos.z == bot_pos.z):
                     continue
-                # 空きスペースを確認
+                # Confirm free space
                 for x_offset in range(X_size):
                     for y_offset in range(Y_size):
                         for z_offset in range(Z_size):
-                            # 上部のブロックが空気であることを確認
+                            # Ensure top block is air
                             top = self.bot.blockAt(Vec3(
                                 pos.x + x_offset,
                                 pos.y + y_offset,
                                 pos.z + z_offset
                             ))
                             
-                            # 下部のブロックが掘れる固体ブロックであることを確認
+                            # Ensure bottom block is diggable solid block
                             bottom = self.bot.blockAt(Vec3(
                                 pos.x + x_offset,
                                 pos.y - 1,
                                 pos.z + z_offset
                             ))
-                            # 条件チェック
+                            # Conditional checks
                             if (not top or top.name != 'air' or 
                                 not bottom or not hasattr(bottom, 'drops') or not bottom.diggable):
                                 empty = False
@@ -401,53 +401,53 @@ class Skills:
                         if not empty:
                             break
                 
-                # 適切なスペースが見つかった場合は、そのポジションを返す
+                # Yield position if adequate space is found
                 if empty:
                     result = pos
                     return result
             
-            # 適切なスペースが見つからなかった場合は、Noneを返す
+            # Return None if no adequate space found
             return None
             
         except Exception as e:
-            # エラーが発生した場合はデフォルト値を返す
-            self.bot.chat(f"空きスペースの検索中にエラーが発生しました: {str(e)}")
+            # Return default value if error occurs
+            self.bot.chat(f"An error occurred while searching for free space: {str(e)}")
             import traceback
             traceback.print_exc()
             
-            # デバッグ情報を出力
+            # Output debug info
             position = self.bot.entity.position
             print(f"Debug: {position}")
             
-            # デフォルト値としてボットの足元の座標を返す
+            # Return bot's feet coordinates as default value
             return Vec3(int(position.x), int(position.y) + y_offset, int(position.z))
         
     async def craft_items(self, item_name, num=1):
         """
-        指定されたアイテムを指定個数分作成します。
+        Crafts the specified number of the specified item.
         
-        このメソッドは以下の処理を行います：
-        1. 指定されたアイテムのレシピを検索します
-        2. 取得したレシピが、クラフトテーブルが必要な場合、インベントリのクラフティングテーブルを設置するか近くのクラフトテーブルを探します
-        3. 必要な材料がインベントリにあるか確認します
-        4. クラフティングを実行します
-        5. 作成したアイテムの結果と詳細を返します
+        This method performs the following operations:
+        1. Searches for the recipe of the specified item.
+        2. If the retrieved recipe requires a crafting table, placing a crafting table from inventory or finds a nearby one.
+        3. Checks if the required materials are in the inventory.
+        4. Executes crafting.
+        5. Returns the results and details of the crafted item.
         
         Args:
-            item_name (str): 作成するアイテムの名前。Minecraftの内部アイテム名を使用します
-                             (例: "stick", "crafting_table", "wooden_pickaxe")
-            num (int): 作成する数量。デフォルトは1
+            item_name (str): Name of the item to craft. Use Minecraft internal item names.
+                             (e.g., "stick", "crafting_table", "wooden_pickaxe")
+            num (int): Number to craft. Default is 1.
             
         Returns:
-            dict: 結果を含む辞書
-                - success (bool): 作成に成功した場合はTrue、失敗した場合はFalse
-                - message (str): 結果メッセージ
-                - error (str, optional): エラーがある場合のエラーコード
-                - exception (str, optional): 例外が発生した場合の例外メッセージ
-                - item (str): 作成しようとしたアイテム名
-                - count (int): 作成しようとした数量
+            dict: Dictionary containing the results
+                - success (bool): True if crafting succeeds, False if it fails.
+                - message (str): Result message.
+                - error (str, optional): Error code if there is an error.
+                - exception (str, optional): Exception message if an exception occurred.
+                - item (str): Name of the item attempted to craft.
+                - count (int): Number attempted to craft.
         """
-        self.bot.chat(f"{str(item_name)}を{str(num)}個作成します。")
+        self.bot.chat(f"Crafting {str(num)} {str(item_name)}(s).")
         result = {
             "success": False,
             "message": "",
@@ -458,25 +458,25 @@ class Skills:
         try:
             placed_table = False
             
-            # レシピが存在するか確認
+            # Check if recipe exists
             item_id = self._get_item_id(item_name)
             
             recipes = self.bot.recipesFor(item_id, None, num, None)
             crafting_table_recipes = self.bot.recipesFor(item_id, None, num, True)
             if not any(True for _ in recipes) and not any(True for _ in crafting_table_recipes):
-                # 材料不足の場合、必要な材料を調べる
+                # Investigate required materials if there's a shortage
                 required_materials = []
-                # レシピから必要な材料を取得
+                # Fetch required materials from recipe
                 recipe_data = self.get_item_crafting_recipes(item_name)
                 if recipe_data and recipe_data[0]:
                     recipe_dict = recipe_data[0][0]
                     required_materials = [f"{key}: {value}" for key, value in recipe_dict.items()]
                 else:
-                    required_materials.append("レシピが見つかりません")
+                    required_materials.append("Recipe not found")
                 
-                error_msg = f"{str(item_name)}を作成するための材料が不足しています"
+                error_msg = f"Insufficient materials to craft {str(item_name)}"
                 if required_materials:
-                    error_msg += f"。必要な材料: {', '.join(required_materials)}"
+                    error_msg += f". Required materials: {', '.join(required_materials)}"
                     
                 self.bot.chat(error_msg)
                 result["message"] = error_msg
@@ -489,23 +489,23 @@ class Skills:
             crafting_table = None
             crafting_table_range = 32
 
-            # クラフティングテーブルが必要な場合
-            if not any(True for _ in recipes) and any(True for _ in crafting_table_recipes):  # Proxyオブジェクトの空チェック
+            # If crafting table is needed
+            if not any(True for _ in recipes) and any(True for _ in crafting_table_recipes):  # Proxy object empty check
                 recipes = self.bot.recipesFor(item_id, None, num, True)
                 if not recipes:
-                    self.bot.chat(f"{str(item_name)}のレシピが見つかりません")
-                    error_msg = f"{str(item_name)}のレシピが見つかりません"
+                    self.bot.chat(f"Recipe for {str(item_name)} not found")
+                    error_msg = f"Recipe for {str(item_name)} not found"
                     self.bot.chat(error_msg)
                     result["message"] = error_msg
                     result["error"] = "recipe_not_found"
                     return result
                     
-                # クラフティングテーブルを探す
+                # Search for crafting table
                 crafting_table = await self.get_nearest_block('crafting_table', crafting_table_range)
                 if not crafting_table:
-                    # インベントリにクラフティングテーブルがあるか確認
+                    # Check if there is a crafting table in inventory
                     if (await self.get_inventory_counts()).get('crafting_table', 0) > 0:
-                        # クラフティングテーブルを設置
+                        # Place crafting table
                         pos = await self.get_nearest_free_space(X_size=1,Z_size=1,distance=6)
                         place_result =await self.place_block('crafting_table', pos.x, pos.y, pos.z)
                         if not place_result["success"]:
@@ -520,21 +520,21 @@ class Skills:
                             recipes = self.bot.recipesFor(item_id, None, 1, crafting_table)
                             placed_table = True
                     else:
-                        self.bot.chat(f"{str(item_name)}の作成には作業台が必要ですが、周辺32ブロック以内に作業台が見つからず、インベントリにも作業台がないため作成できません")
-                        error_msg = f"{str(item_name)}の作成には作業台が必要ですが、周辺32ブロック以内に作業台が見つからず、インベントリにも作業台がないため作成できません"
+                        self.bot.chat(f"Crafting {str(item_name)} requires a crafting table, but none was found within 32 blocks and none in inventory.")
+                        error_msg = f"Crafting {str(item_name)} requires a crafting table, but none was found within 32 blocks and none in inventory."
                         self.bot.chat(error_msg)
                         result["message"] = error_msg
                         result["error"] = "crafting_table_required"
                         return result
                 else:
-                    # 近くに作業台がある場合は、レシピを取得
+                    # If there's a crafting table nearby, fetch recipe
                     recipes = self.bot.recipesFor(item_id, None, 1, crafting_table)
                 
-            # クラフティングテーブルまで移動
+            # Move to crafting table
             if crafting_table and self.bot.entity.position.distanceTo(crafting_table.position) > 4:
                 move_result = await self.move_to_position(crafting_table.position.x, crafting_table.position.y, crafting_table.position.z)
                 if not move_result:
-                    error_msg = "クラフティングテーブルまで移動できません"
+                    error_msg = "Could not move to crafting table"
                     self.bot.chat(str(error_msg))
                     result["message"] = error_msg
                     result["error"] = "movement_failed"
@@ -543,20 +543,20 @@ class Skills:
             recipe = recipes[0]
             try:
 
-                # レシピの有効性チェック
+                # Check recipe validity
                 if not recipe or not hasattr(recipe, 'result'):
-                    error_msg = f"{str(item_name)}の有効なレシピが見つかりません"
+                    error_msg = f"Could not find a valid recipe for {str(item_name)}"
                     self.bot.chat(str(error_msg))
                     result["message"] = error_msg
                     result["error"] = "invalid_recipe"
                     return result
 
-                # クラフト実行
+                # Execute craft
                 self.bot.craft(recipe, num, crafting_table)
-                success_msg = f"{str(item_name)}を{str(num)}個作成しました"
+                success_msg = f"Crafted {str(num)} {str(item_name)}(s)"
                 self.bot.chat(success_msg)
                 
-                # 設置したクラフティングテーブルを回収
+                # Retrieve the placed crafting table
                 if placed_table:
                     await self.collect_block('crafting_table', 1)
                 
@@ -565,7 +565,7 @@ class Skills:
                 return result
                 
             except Exception as e:
-                error_msg = f"クラフト中にエラーが発生しました: {str(e)}"
+                error_msg = f"An error occurred while crafting: {str(e)}"
                 self.bot.chat(str(error_msg))
                 result["message"] = error_msg
                 result["error"] = "crafting_error"
@@ -576,7 +576,7 @@ class Skills:
                 return result
                 
         except Exception as e:
-            error_msg = f"予期せぬエラーが発生しました: {str(e)}"
+            error_msg = f"An unexpected error occurred: {str(e)}"
             self.bot.chat(str(error_msg))
             result["message"] = error_msg
             result["error"] = "unexpected_error"
@@ -587,26 +587,26 @@ class Skills:
         
     async def place_block(self, block_name, x, y, z, place_on='bottom'):
         """
-        指定された座標にブロックを設置します。隣接するブロックから設置します。
-        設置場所にブロックがある場合や、設置できる場所がない場合は失敗します。
+        Places a block at the specified coordinates. Places off an adjacent block.
+        Fails if there is a block at the placement location or no placeable surface.
         
         Args:
-            block_name (str): 設置するブロック名
-            x : 設置するX座標
-            y : 設置するY座標
-            z : 設置するZ座標
-            place_on (str): 優先的に設置する面の方向。'top', 'bottom', 'north', 'south', 'east', 'west', 'side'から選択。デフォルトは'bottom'
-            dont_cheat (bool): チートモードでも通常の方法でブロックを設置するかどうか。デフォルトはFalse
+            block_name (str): Name of the block to place
+            x : Target X coordinate
+            y : Target Y coordinate
+            z : Target Z coordinate
+            place_on (str): Preferred face direction for placement. Choose from 'top', 'bottom', 'north', 'south', 'east', 'west', 'side'. Default 'bottom'
+            dont_cheat (bool): Whether to place in a non-cheaty way. Default is False
             
         Returns:
-            dict: 結果を含む辞書
-                - success (bool): 設置に成功した場合はTrue、失敗した場合はFalse
-                - message (str): 結果メッセージ
-                - position (dict): 設置を試みた位置 {x, y, z}
-                - block_name (str): 設置しようとしたブロック名
-                - error (str, optional): エラーがある場合のエラーコード
+            dict: Dictionary containing results
+                - success (bool): True if placed successfully, False otherwise
+                - message (str): Result message
+                - position (dict): Attempted placement position {x, y, z}
+                - block_name (str): Block name attempted to place
+                - error (str, optional): Error code if any
         """
-        self.bot.chat(f"{block_name}を座標({x}, {y}, {z})に設置します。")
+        self.bot.chat(f"Placing {block_name} at coordinates ({x}, {y}, {z}).")
         result = {
             "success": False,
             "message": "",
@@ -614,75 +614,75 @@ class Skills:
             "block_name": block_name
         }
         
-        # ブロックIDの検証
+        # Validate Block ID
         try:
             block_id = None
             
-            # ブロック名からIDを取得
+            # Fetch ID from block name
             block_id = self._get_item_id(block_name)
     
             if block_id is None:
-                self.bot.chat(f"無効なブロック名です: {block_name}")
-                result["message"] = f"無効なブロック名です: {block_name}"
+                self.bot.chat(f"Invalid block name: {block_name}")
+                result["message"] = f"Invalid block name: {block_name}"
                 result["error"] = "invalid_block_name"
                 self.bot.chat(result["message"])
                 return result
         except Exception as e:
-            self.bot.chat(f"ブロック名の検証中にエラーが発生しました: {str(e)}")
-            result["message"] = f"ブロック名の検証中にエラーが発生しました: {str(e)}"
+            self.bot.chat(f"Error validating block name: {str(e)}")
+            result["message"] = f"Error validating block name: {str(e)}"
             result["error"] = "block_validation_error"
             self.bot.chat(result["message"])
             return result
             
-        # Vec3オブジェクトを作成
+        # Instantiate Vec3 object
         Vec3 = require('vec3')
         target_dest = Vec3(int(x), int(y), int(z))
         
         try:
-            # アイテム名の修正（一部のブロックは設置時に名前が変わる）
+            # Correct item names (some block names differ when placed)
             item_name = block_name
             if item_name == "redstone_wire":
                 item_name = "redstone"
                 
-            # インベントリからブロックを探す
+            # Search for block in inventory
             block_item = None
             for item in self.bot.inventory.items():
                 if item.name == item_name:
                     block_item = item
                     break
             
-            # ブロックがない場合は失敗
+            # Fail if block is missing
             if not block_item:
-                result["message"] = f"{block_name}をインベントリに持っていません"
+                result["message"] = f"{block_name} is not in your inventory"
                 result["error"] = "item_not_in_inventory"
                 self.bot.chat(result["message"])
                 return result
                 
-            # 設置先のブロックをチェック
+            # Check the destination block
             target_block = self.bot.blockAt(target_dest)
             if target_block.name == block_name:
-                result["message"] = f"{block_name}は既に座標({target_block.position})にあります"
+                result["message"] = f"{block_name} is already at coordinates ({target_block.position})"
                 result["error"] = "block_already_exists"
                 self.bot.chat(result["message"])
                 return result
                 
-            # 設置可能な空間かチェック
+            # Check if space is placeable
             empty_blocks = ['air', 'water', 'lava', 'grass', 'short_grass', 'tall_grass', 'snow', 'dead_bush', 'fern']
             if target_block.name not in empty_blocks:
-                result["message"] = f"座標({target_block.position})には既に{target_block.name}があります"
+                result["message"] = f"Coordinates ({target_block.position}) is already occupied by {target_block.name}"
                 
-                # 破壊を試みる
+                # Try breaking it
                 break_result = await self._break_block_at(x, y, z)
                 if not break_result["success"]:
-                    result["message"] = f"ブロックの設置場所に{target_block.name}があり、破壊できませんでした"
+                    result["message"] = f"Failed to break {target_block.name} which occupied the placement location"
                     result["error"] = "space_occupied"
                     self.bot.chat(result["message"])
                     return result
                     
-                # ブロックが破壊されるまで少し待機
+                # Wait slightly for the block to break
                 await asyncio.sleep(0.2)
                 
-            # 設置方向のマップを作成
+            # Map placement directions
             dir_map = {
             'top': Vec3(0, 1, 0),
             'bottom': Vec3(0, -1, 0),
@@ -692,25 +692,25 @@ class Skills:
             'west': Vec3(-1, 0, 0)
             }
         
-            # 設置方向のリストを作成
+            # Create a list of placement directions
             directions = []
             if place_on == 'side':
-                # 側面への設置を優先
+                # Prioritize side placement
                 directions.extend([dir_map['north'], dir_map['south'], dir_map['east'], dir_map['west']])
             elif place_on in dir_map:
-                # 指定方向を優先
+                # Prioritize specified direction
                 directions.append(dir_map[place_on])
             else:
-                # デフォルトは下面
+                # Default to bottom
                 directions.append(dir_map['bottom'])
-                result["message"] += f"\n不明な設置方向'{place_on}'が指定されました。デフォルトの'bottom'を使用します。"
+                result["message"] += f"\nUnknown placement direction '{place_on}'. Defaulting to 'bottom'."
                 
-            # 他の方向も追加（優先度は低い）
+            # Add other directions (lower priority)
             for direction in dir_map.values():
                 if not any(d.x == direction.x and d.y == direction.y and d.z == direction.z for d in directions):
                     directions.append(direction)
                     
-            # 設置できるブロックを探す
+            # Search for block to build off of
             build_off_block = None
             face_vec = None
             
@@ -720,78 +720,78 @@ class Skills:
                 
                 if ref_block and ref_block.name not in empty_blocks:
                     build_off_block = ref_block
-                    # 方向を反転（設置面は反対側）
+                    # Invert direction (placement surface is on the opposite side)
                     face_vec = Vec3(-direction.x, -direction.y, -direction.z)
                     break
                     
-            # 設置できるブロックがない場合
+            # Fail if no build-off block found
             if not build_off_block:
-                result["message"] = f"座標({target_dest})には設置できるブロックの面がありません"
+                result["message"] = f"No placeable block surfaces found at coordinates ({target_dest})"
                 result["error"] = "no_adjacent_block"
                 self.bot.chat(result["message"])
                 return result
                 
-            # プレイヤーとブロックの位置関係をチェック
+            # Check player and block position relation
             player_pos = self.bot.entity.position
             player_pos_above = player_pos.plus(Vec3(0, 1, 0))
             
-            # 一部のブロックは移動なしで設置可能
+            # Some blocks can be placed without moving
             dont_move_for = [
                 'torch', 'redstone_torch', 'redstone_wire', 'lever', 'button', 
                 'rail', 'detector_rail', 'powered_rail', 'activator_rail', 
                 'tripwire_hook', 'tripwire', 'water_bucket'
             ]
             
-            # ブロックの設置位置とプレイヤーが重なっていないか確認
+            # Ensure the player doesn't intersect with the placed block
             if block_name not in dont_move_for and (
                 player_pos.distanceTo(target_block.position) < 1 or 
                 player_pos_above.distanceTo(target_block.position) < 1
             ):
-                # プレイヤーが設置位置と重なっている場合、少し離れる
+                # Step away slightly if player is intersecting
                 try:
                     goal = self.pathfinder.goals.GoalNear(target_block.position.x, target_block.position.y, target_block.position.z, 2)
                     inverted_goal = self.pathfinder.goals.GoalInvert(goal)
                     self.bot.pathfinder.goto(inverted_goal)
                 except Exception as e:
-                    result["message"] = f"設置位置から離れる際にエラーが発生しました: {str(e)}"
+                    result["message"] = f"Error stepping away from placement location: {str(e)}"
                     result["error"] = "movement_error"
                     self.bot.chat(result["message"])
                     return result
             
-            # ブロックが遠すぎる場合は近づく
+            # Move closer if block is too far
             if self.bot.entity.position.distanceTo(target_block.position) > 4.5:
                 try:
                     await self.move_to_position(target_block.position.x, target_block.position.y, target_block.position.z, 4)
                 except Exception as e:
-                    result["message"] = f"ブロックに近づく際にエラーが発生しました: {str(e)}"
+                    result["message"] = f"Error trying to approach the block: {str(e)}"
                     result["error"] = "movement_error"
                     self.bot.chat(result["message"])
                     return result
                     
-            # ブロックを手に持つ
+            # Hold the block
             self.bot.equip(block_item, 'hand')
             
-            # 設置対象のブロックを見る
+            # Look at target block face
             self.bot.lookAt(build_off_block.position)
             
-            # ブロックを設置
+            # Place the block
             try:
                 self.bot.placeBlock(build_off_block, face_vec)
-                result["message"] = f"{block_name}を座標({target_dest})に設置しました"
+                result["message"] = f"Placed {block_name} at coordinates ({target_dest})"
                 result["success"] = True
                 self.bot.chat(result["message"])
                 
-                # 設置完了を少し待つ
+                # Wait briefly for completion
                 await asyncio.sleep(0.2)
                 return result
             except Exception as e:
-                result["message"] = f"{block_name}の設置中にエラーが発生しました: {str(e)}"
+                result["message"] = f"An error occurred while placing {block_name}: {str(e)}"
                 result["error"] = "block_placement_error"
                 self.bot.chat(result["message"])
                 return result
                 
         except Exception as e:
-            result["message"] = f"ブロック設置処理中に予期せぬエラーが発生しました: {str(e)}"
+            result["message"] = f"An unexpected error occurred during block placement: {str(e)}"
             result["error"] = "unexpected_error"
             self.bot.chat(result["message"])
             import traceback
@@ -800,16 +800,16 @@ class Skills:
     
     async def equip(self, item_name):
         """
-        指定されたアイテムを適切な装備スロットに装備します（道具や防具など）。
+        Equips the specified item to the appropriate equipment slot (tools, armor, etc.).
         
         Args:
-            item_name (str): 装備するアイテムまたはブロックの名前
+            item_name (str): Name of the item or block to equip
             
         Returns:
-            dict: 結果を含む辞書
-                - success (bool): 装備に成功した場合はTrue、失敗した場合はFalse
-                - message (str): 結果メッセージ
-                - item (str): 装備しようとしたアイテム名
+            dict: Dictionary containing results
+                - success (bool): True if equipped successfully, False otherwise
+                - message (str): Result message
+                - item (str): Item name attempted to equip
         """
         result = {
             "success": False,
@@ -818,7 +818,7 @@ class Skills:
         }
         
         try:
-            # インベントリからアイテムを探す
+            # Search for item in inventory
             item = None
             for slot in self.bot.inventory.slots:
                 if slot and slot.name == item_name:
@@ -826,54 +826,54 @@ class Skills:
                     break
                     
             if not item:
-                result["message"] = f"{item_name}を装備できません。インベントリにありません。"
+                result["message"] = f"Cannot equip {item_name}. It is not in your inventory."
                 self.bot.chat(result["message"])
                 return result
                 
-            # アイテムタイプに基づいて装備スロットを決定
+            # Determine equipment slot based on item type
             if "leggings" in item_name:
                 self.bot.equip(item, "legs")
-                slot_type = "脚"
+                slot_type = "legs"
             elif "boots" in item_name:
                 self.bot.equip(item, "feet")
-                slot_type = "足"
+                slot_type = "feet"
             elif "helmet" in item_name:
                 self.bot.equip(item, "head")
-                slot_type = "頭"
+                slot_type = "head"
             elif "chestplate" in item_name or "elytra" in item_name:
                 self.bot.equip(item, "torso")
-                slot_type = "胴体"
+                slot_type = "torso"
             elif "shield" in item_name:
                 self.bot.equip(item, "off-hand")
-                slot_type = "オフハンド"
+                slot_type = "off-hand"
             else:
                 self.bot.equip(item, "hand")
-                slot_type = "メインハンド"
+                slot_type = "main hand"
                 
             result["success"] = True
-            result["message"] = f"{item_name}を{slot_type}に装備しました。"
+            result["message"] = f"Equipped {item_name} to {slot_type}."
             self.bot.chat(result["message"])
             return result
             
         except Exception as e:
-            result["message"] = f"{item_name}の装備中にエラーが発生しました: {str(e)}"
+            result["message"] = f"Error occurred while equipping {item_name}: {str(e)}"
             self.bot.chat(result["message"])
             return result
             
     async def discard(self, item_name, num=-1):
         """
-        指定されたアイテムを捨てます。
+        Discards the specified item.
         
         Args:
-            item_name (str): 捨てるアイテムまたはブロックの名前
-            num (int): 捨てるアイテムの数。デフォルトは-1で、すべてのアイテムを捨てます。
+            item_name (str): Name of the item or block to discard
+            num (int): Number of items to discard. Default is -1, which discards all items of that name.
             
         Returns:
-            dict: 結果を含む辞書
-                - success (bool): アイテムを捨てることに成功した場合はTrue、失敗した場合はFalse
-                - message (str): 結果メッセージ
-                - item (str): 捨てようとしたアイテム名
-                - count (int): 捨てたアイテムの数
+            dict: Dictionary containing results
+                - success (bool): True if item discarded successfully, False otherwise
+                - message (str): Result message
+                - item (str): Item name attempted to discard
+                - count (int): Number of items discarded
         """
         result = {
             "success": False,
@@ -886,7 +886,7 @@ class Skills:
             discarded = 0
             
             while True:
-                # インベントリからアイテムを探す
+                # Search for item in inventory
                 item = None
                 for slot_item in self.bot.inventory.items():
                     if slot_item and slot_item.name == item_name:
@@ -896,47 +896,47 @@ class Skills:
                 if not item:
                     break
                 
-                # 捨てる数を計算
+                # Calculate number to discard
                 to_discard = item.count if num == -1 else min(num - discarded, item.count)
                 
-                # アイテムを捨てる
+                # Discard item
                 self.bot.toss(item.type, None, to_discard)
                 discarded += to_discard
                 
-                # 指定した数だけ捨てたら終了
+                # Stop if discarded specified amount
                 if num != -1 and discarded >= num:
                     break
             
             if discarded == 0:
-                result["message"] = f"{item_name}を捨てることができません。インベントリにありません。"
+                result["message"] = f"Cannot discard {item_name}. It is not in your inventory."
                 self.bot.chat(result["message"])
                 return result
             
             result["success"] = True
             result["count"] = discarded
-            result["message"] = f"{discarded}個の{item_name}を捨てました。"
+            result["message"] = f"Discarded {discarded} {item_name}(s)."
             self.bot.chat(result["message"])
             return result
             
         except Exception as e:
-            result["message"] = f"{item_name}を捨てる際にエラーが発生しました: {str(e)}"
+            result["message"] = f"Error occurred while discarding {item_name}: {str(e)}"
             self.bot.chat(result["message"])
             return result
 
     async def put_in_chest(self, item_name, num=-1):
         """
-        指定されたアイテムを最も近いチェストに入れます。スタック数が１のツールなどは１つしか入れられません。その場合は、複数回実行してください
+        Puts specified item into the nearest chest. Unstackable items like tools can only be inserted one at a time. Run multiple times in that case.
 
         Args:
-            item_name (str): チェストに入れるアイテムまたはブロックの名前
-            num (int): チェストに入れるアイテムの数。デフォルトは-1で、すべてのアイテムを入れます。
+            item_name (str): Name of the item or block to put in the chest
+            num (int): Number of items to put in. Default is -1, which puts all in.
             
         Returns:
-            dict: 結果を含む辞書
-                - success (bool): アイテムをチェストに入れることに成功した場合はTrue、失敗した場合はFalse
-                - message (str): 結果メッセージ
-                - item (str): チェストに入れようとしたアイテム名
-                - count (int): チェストに入れたアイテムの数
+            dict: Dictionary containing results
+                - success (bool): True if item put in chest successfully, False otherwise
+                - message (str): Result message
+                - item (str): Item name attempted to put in chest
+                - count (int): Number of items put in chest
         """
         result = {
             "success": False,
@@ -946,14 +946,14 @@ class Skills:
         }
         
         try:
-            # 最も近いチェストを探す
+            # Look for the nearest chest
             chest = await self.get_nearest_block("chest", 32)
             if not chest:
-                result["message"] = "近くにチェストが見つかりませんでした。"
+                result["message"] = "No chest found nearby."
                 self.bot.chat(result["message"])
                 return result
                 
-            # インベントリからアイテムを探す
+            # Search for item in inventory
             item = None
             for slot_item in self.bot.inventory.items():
                 if slot_item and slot_item.name == item_name:
@@ -961,50 +961,50 @@ class Skills:
                     break
                     
             if not item:
-                result["message"] = f"{item_name}をチェストに入れることができません。インベントリにありません。"
+                result["message"] = f"Cannot put {item_name} in chest. It is not in your inventory."
                 self.bot.chat(result["message"])
                 return result
                 
-            # チェストに入れる数を計算
+            # Calculate number to put in chest
             to_put = item.count if num == -1 else min(num, item.count)
             
-            # チェストまで移動
+            # Move to chest
             await self.move_to_position(chest.position.x, chest.position.y, chest.position.z, 2)
             
-            # チェストを開く
+            # Open chest
             chest_container = self.bot.openContainer(chest)
             
-            # アイテムをチェストに入れる
+            # Put items in chest
             chest_container.deposit(item.type, None, to_put)
             
-            # チェストを閉じる
+            # Close chest
             chest_container.close()
             
             result["success"] = True
             result["count"] = to_put
-            result["message"] = f"{to_put}個の{item_name}をチェストに入れました。"
+            result["message"] = f"Put {to_put} {item_name}(s) in the chest."
             self.bot.chat(result["message"])
             return result
             
         except Exception as e:
-            result["message"] = f"{item_name}をチェストに入れる際にエラーが発生しました: {str(e)}"
+            result["message"] = f"Error occurred while putting {item_name} in the chest: {str(e)}"
             self.bot.chat(result["message"])
             return result
 
     async def take_from_chest(self, item_name, num=-1):
         """
-        指定されたアイテムを最も近いチェストから取り出します。
+        Takes the specified item out of the nearest chest.
         
         Args:
-            item_name (str): チェストから取り出すアイテムまたはブロックの名前
-            num (int): チェストから取り出すアイテムの数。デフォルトは-1で、すべてのアイテムを取り出します。
+            item_name (str): Name of the item or block to take out
+            num (int): Number of items to take out. Default is -1, which takes all out.
             
         Returns:
-            dict: 結果を含む辞書
-                - success (bool): アイテムをチェストから取り出すことに成功した場合はTrue、失敗した場合はFalse
-                - message (str): 結果メッセージ
-                - item (str): チェストから取り出そうとしたアイテム名
-                - count (int): チェストから取り出したアイテムの数
+            dict: Dictionary containing results
+                - success (bool): True if item taken from chest successfully, False otherwise
+                - message (str): Result message
+                - item (str): Item name attempted to take out
+                - count (int): Number of items taken out
         """
         result = {
             "success": False,
@@ -1014,20 +1014,20 @@ class Skills:
         }
         
         try:
-            # 最も近いチェストを探す
+            # Look for nearest chest
             chest = await self.get_nearest_block("chest", 32)
             if not chest:
-                result["message"] = "近くにチェストが見つかりませんでした。"
+                result["message"] = "No chest found nearby."
                 self.bot.chat(result["message"])
                 return result
                 
-            # チェストまで移動
+            # Move to chest
             await self.move_to_position(chest.position.x, chest.position.y, chest.position.z, 2)
             
-            # チェストを開く
+            # Open chest
             chest_container = self.bot.openContainer(chest)
             
-            # チェスト内のアイテムを探す
+            # Look for item in chest
             item = None
             for container_item in chest_container.containerItems():
                 if container_item and container_item.name == item_name:
@@ -1035,40 +1035,40 @@ class Skills:
                     break
                     
             if not item:
-                result["message"] = f"チェスト内に{item_name}が見つかりませんでした。"
+                result["message"] = f"{item_name} not found in the chest."
                 chest_container.close()
                 self.bot.chat(result["message"])
                 return result
                 
-            # 取り出す数を計算
+            # Calculate number to take out
             to_take = item.count if num == -1 else min(num, item.count)
             
-            # アイテムをチェストから取り出す
+            # Take item out of chest
             chest_container.withdraw(item.type, None, to_take)
             
-            # チェストを閉じる
+            # Close chest
             chest_container.close()
             
             result["success"] = True
             result["count"] = to_take
-            result["message"] = f"チェストから{to_take}個の{item_name}を取り出しました。"
+            result["message"] = f"Took {to_take} {item_name}(s) from the chest."
             self.bot.chat(result["message"])
             return result
             
         except Exception as e:
-            result["message"] = f"{item_name}をチェストから取り出す際にエラーが発生しました: {str(e)}"
+            result["message"] = f"Error occurred while taking {item_name} from the chest: {str(e)}"
             self.bot.chat(result["message"])
             return result
 
     async def view_chest(self,maxDistance=32):
         """
-        近くにあるチェストに移動し、中身を表示します。複数チェストがある場合全てのチェストの中身を表示します。
+        Moves to a nearby chest and shows its contents. If there are multiple chests, shows the contents of all of them.
         
         Returns:
-            dict: 結果を含む辞書
-                - success (bool): チェストを表示できた場合はTrue、失敗した場合はFalse
-                - message (str): 結果メッセージ
-                - result_list (list, optional): チェスト内のアイテムリスト（成功時のみ）
+            dict: Dictionary containing results
+                - success (bool): True if chest contents could be displayed, False otherwise
+                - message (str): Result message
+                - result_list (list, optional): List of items in chest (only on success)
 
         Example:
             >>> view_chest()
@@ -1083,7 +1083,7 @@ class Skills:
                         }, 
                         {
                             'position': {'x': -2, 'y': -60, 'z': 0}, 
-                            'items': 'チェストは空です。'
+                            'items': 'Chest is empty'
                         }
                     ]
             }
@@ -1094,46 +1094,46 @@ class Skills:
         }
         
         try:
-            # 最も近いチェストを探す
+            # Look for the nearest chest
             chest = self.bot.findBlocks({
                 'matching':self.mcdata.blocksByName['chest'].id,
                 'maxDistance': maxDistance,
                 'count': 10
             })
             if not any(True for _ in chest):
-                result["message"] = "近くにチェストが見つかりませんでした。"
+                result["message"] = "No chest found nearby."
                 self.bot.chat(result["message"])
                 return result
             
             result_list = []
             for chest_pos in chest:
-                # チェストまで移動
+                # Move to chest
                 move_result = await self.move_to_position(chest_pos.x, chest_pos.y, chest_pos.z, 2)
                 if not move_result["success"]:
-                    result["message"] = f"チェストへの移動に失敗: {move_result.get('message', '不明なエラー')}"
+                    result["message"] = f"Failed to move to chest: {move_result.get('message', 'Unknown error')}"
                     self.bot.chat(result["message"])
                     return result
             
-                # チェストを開く
+                # Open chest
                 chest_block = self.bot.blockAt(chest_pos)
                 chest_container = self.bot.openContainer(chest_block)
             
-                # チェスト内のアイテムを取得
+                # Get items in chest
                 items = chest_container.containerItems()
             
-                # アイテムをリストに変換
+                # Convert items to list
                 item_list = []
                 result_dict = {}
                 if items:
                     for item in items:
-                        if item:  # Noneでないアイテムのみ追加
+                        if item:  # Only append non-None items
                             item_list.append({
                                 "name": item.name,
                                 "count": item.count
                             })
                 if not item_list:
                     result_dict["position"] = {"x": chest_pos.x, "y": chest_pos.y, "z": chest_pos.z}
-                    result_dict["items"] = "チェストは空です。"
+                    result_dict["items"] = "Chest is empty."
                 else:
                     result_dict["position"] = {"x": chest_pos.x, "y": chest_pos.y, "z": chest_pos.z}
                     result_dict["items"] = item_list
@@ -1147,17 +1147,17 @@ class Skills:
             return result
             
         except Exception as e:
-            result["message"] = f"チェストの表示中にエラーが発生しました: {str(e)}"
+            result["message"] = f"Error occurred while displaying chest contents: {str(e)}"
             self.bot.chat(result["message"])
             return result
 
     async def consume(self, item_name=""):
         """
-        指定されたアイテムを1つ食べる/飲みます。
-        満腹度が最大の場合は消費できません。
+        Eats/drinks one of the specified item.
+        Cannot consume if hunger is max.
         
         Args:
-            item_name (str): 食べる/飲むアイテムの名前。デフォルトは空文字列で、その場合は手に持っているアイテムを消費します。
+            item_name (str): Name of item to eat/drink. Default is empty string, which assumes holding item to consume.
         """
         result = {
             "success": False,
@@ -1165,60 +1165,60 @@ class Skills:
         }
         
         try:
-            # 満腹度チェック
+            # Check hunger
             if hasattr(self.bot, 'food') and self.bot.food >= 20:
-                result["message"] = "満腹度が最大のため、これ以上食べ物を消費できません。"
+                result["message"] = "Cannot consume more food, hunger is maximized."
                 self.bot.chat(result["message"])
                 return result
 
             item = None
             name = item_name
             
-            # アイテム名が指定されている場合はインベントリから探す
+            # If item name is specified, search for it in inventory
             if item_name:
                 for inv_item in self.bot.inventory.items():
                     if inv_item.name == item_name:
                         item = inv_item
                         break
             
-            # アイテムが見つからない場合
+            # If item not found
             if not item:
-                result["message"] = f"{name if name else '指定されたアイテム'}を消費できません。インベントリにアイテムがありません。"
+                result["message"] = f"Cannot consume {name if name else 'specified item'}. Item is not in inventory."
                 self.bot.chat(result["message"])
                 return result
                 
-            # アイテムを手に持つ
+            # Hold the item
             self.bot.equip(item, 'hand')
             
-            # アイテムを消費
+            # Consume item
             self.bot.consume()
             
             result["success"] = True
             result["item"] = item.name
-            result["message"] = f"{item.name}を消費しました。"
+            result["message"] = f"Consumed {item.name}."
             self.bot.chat(result["message"])
             return result
             
         except Exception as e:
-            result["message"] = f"アイテム消費中にエラーが発生しました: {str(e)}"
+            result["message"] = f"Error occurred while consuming item: {str(e)}"
             self.bot.chat(result["message"])
             return result
 
     async def go_to_nearest_block(self, block_name, min_distance=2, range=64):
         """
-        指定されたタイプの最も近いブロックまで移動します。
+        Moves to the nearest block of the specified type.
         
         Args:
-            block_name (str): 移動先のブロック名
-            min_distance (int): ブロックから保つ距離。デフォルトは2
-            range (int): ブロックを探す最大範囲。デフォルトは64
+            block_name (str): Destination block name
+            min_distance (int): Distance to keep from block. Default 2
+            range (int): Max search range for the block. Default 64
             
         Returns:
-            dict: 結果を含む辞書
-                - success (bool): ブロックまで移動できた場合はTrue、失敗した場合はFalse
-                - message (str): 結果メッセージ
-                - block_name (str): 探したブロック名
-                - position (dict, optional): 見つかったブロックの位置 {x, y, z}（成功時のみ）
+            dict: Dictionary containing results
+                - success (bool): True if reached the block successfully, False otherwise
+                - message (str): Result message
+                - block_name (str): Searched block name
+                - position (dict, optional): Position of found block {x, y, z} (only on success)
         """
         result = {
             "success": False,
@@ -1227,20 +1227,20 @@ class Skills:
         }
         
         try:
-            # 最大検索範囲の制限
+            # Enforce max search range
             MAX_RANGE = 512
             if range > MAX_RANGE:
                 range = MAX_RANGE
-                self.bot.chat(f"最大検索範囲を{MAX_RANGE}ブロックに制限します。")
+                self.bot.chat(f"Limiting max search range to {MAX_RANGE} blocks.")
                 
-            # 最も近いブロックを探す
+            # Find closest block
             block = await self.get_nearest_block(self._get_item_id(block_name), range)
             if not block:
-                result["message"] = f"{range}ブロック以内に{block_name}が見つかりませんでした。"
+                result["message"] = f"No {block_name} found within {range} blocks."
                 self.bot.chat(result["message"])
                 return result
                 
-            # ブロックの位置を取得
+            # Get block position
             position = block.position
             result["position"] = {
                 "x": position.x,
@@ -1248,20 +1248,20 @@ class Skills:
                 "z": position.z
             }
             
-            # ブロックまで移動
+            # Move to block
             move_result = await self.move_to_position(position.x, position.y, position.z, min_distance)
             if not move_result["success"]:
-                result["message"] = f"{block_name}への移動中にエラーが発生しました: {move_result['message']}"
+                result["message"] = f"Error occurred moving to {block_name}: {move_result['message']}"
                 self.bot.chat(result["message"])
                 return result
                 
             result["success"] = True
-            result["message"] = f"{block_name}(X:{position.x}, Y:{position.y}, Z:{position.z})に到達しました。"
+            result["message"] = f"Arrived at {block_name} (X:{position.x}, Y:{position.y}, Z:{position.z})."
             self.bot.chat(result["message"])
             return result
             
         except Exception as e:
-            result["message"] = f"{block_name}への移動中に予期せぬエラーが発生しました: {str(e)}"
+            result["message"] = f"Unexpected error occurred moving to {block_name}: {str(e)}"
             self.bot.chat(result["message"])
             import traceback
             traceback.print_exc()
@@ -1269,20 +1269,20 @@ class Skills:
 
     async def go_to_nearest_entity(self, entity_type, min_distance=2, range=64):
         """
-        指定されたタイプの最も近いエンティティまで移動します。
+        Moves to the nearest entity of the specified type.
         
         Args:
-            entity_type (str): 移動先のエンティティタイプ（例: "zombie", "sheep", "villager"など）
-            min_distance (int): 移動後、エンティティと保つ距離。デフォルトは2
-            range (int): エンティティを探す最大範囲。デフォルトは64
+            entity_type (str): The entity type to move to (e.g. "zombie", "sheep", "villager", etc)
+            min_distance (int): Distance to keep from the entity after moving. Default 2
+            range (int): Max search range for the entity. Default 64
             
         Returns:
-            dict: 結果を含む辞書
-                - success (bool): エンティティまで移動できた場合はTrue、失敗した場合はFalse
-                - message (str): 結果メッセージ
-                - entity_type (str): 探したエンティティタイプ
-                - position (dict, optional): エンティティの位置 {x, y, z}（成功時のみ）
-                - distance (float, optional): 元の位置からエンティティまでの距離（成功時のみ）
+            dict: Dictionary containing results
+                - success (bool): True if reached the entity successfully, False otherwise
+                - message (str): Result message
+                - entity_type (str): Searched entity type
+                - position (dict, optional): Position of found entity {x, y, z} (only on success)
+                - distance (float, optional): Distance from original position to entity (only on success)
         """
         result = {
             "success": False,
@@ -1291,14 +1291,14 @@ class Skills:
         }
         
         try:
-            # 指定されたタイプのエンティティを探す
+            # Find the specified entity type
             entity = self._get_nearby_entity_of_type(entity_type, range)
             if not entity:
-                result["message"] = f"{range}ブロック以内に{entity_type}が見つかりませんでした。"
+                result["message"] = f"No {entity_type} found within {range} blocks."
                 self.bot.chat(result["message"])
                 return result
                 
-            # エンティティの位置を取得
+            # Get entity position
             position = entity.position
             result["position"] = {
                 "x": position.x,
@@ -1306,27 +1306,27 @@ class Skills:
                 "z": position.z
             }
             
-            # エンティティまでの距離を計算
+            # Calculate distance to entity
             distance = self.bot.entity.position.distanceTo(position)
             result["distance"] = distance
             
-            # エンティティが見つかったことを通知
-            self.bot.chat(f"{entity_type}が{distance}ブロック先で見つかりました。")
+            # Announce found entity
+            self.bot.chat(f"Found {entity_type} {distance} blocks away.")
             
-            # エンティティまで移動
+            # Move to entity
             move_result = await self.move_to_position(position.x, position.y, position.z, min_distance)
             if not move_result["success"]:
-                result["message"] = f"{entity_type}への移動中にエラーが発生しました: {move_result['message']}"
+                result["message"] = f"Error occurred moving to {entity_type}: {move_result['message']}"
                 self.bot.chat(result["message"])
                 return result
                 
             result["success"] = True
-            result["message"] = f"{entity_type}に到達しました。"
+            result["message"] = f"Arrived at {entity_type}."
             self.bot.chat(result["message"])
             return result
             
         except Exception as e:
-            result["message"] = f"{entity_type}への移動中に予期せぬエラーが発生しました: {str(e)}"
+            result["message"] = f"Unexpected error occurred moving to {entity_type}: {str(e)}"
             self.bot.chat(result["message"])
             import traceback
             traceback.print_exc()
@@ -1334,13 +1334,13 @@ class Skills:
 
     async def go_to_bed(self):
         """
-        最も近いベッドで寝ます。
+        Sleep in the nearest bed.
         
         Returns:
-            dict: 結果を含む辞書
-                - success (bool): ベッドで寝ることができた場合はTrue、失敗した場合はFalse
-                - message (str): 結果メッセージ
-                - bed_position (dict, optional): ベッドの位置 {x, y, z}（成功時のみ）
+            dict: Dictionary containing results
+                - success (bool): True if slept in bed successfully, False otherwise
+                - message (str): Result message
+                - bed_position (dict, optional): Bed position {x, y, z} (only on success)
         """
         result = {
             "success": False,
@@ -1348,14 +1348,14 @@ class Skills:
         }
         
         try:
-            # 時間と天候をチェック
+            # Check time and weather
             if not (self.bot.time.isNight or self.bot.isRaining):
-                result["message"] = "まだ寝る時間ではありません。夜または雷雨の時のみ寝ることができます。"
+                result["message"] = "It is not time to sleep yet. You can only sleep at night or during thunderstorms."
                 self.bot.chat(result["message"])
                 return result
             
-            # 近くのベッドを探す
-            # isABedメソッドを使用してベッドを検索
+            # Find a nearby bed
+            # Search for bed using isABed method
             beds = self.bot.findBlocks({
                 'matching': self.bot.isABed,
                 'maxDistance': 32,
@@ -1363,11 +1363,11 @@ class Skills:
             })
             
             if not beds or not any(True for _ in beds):
-                result["message"] = "寝るためのベッドが32ブロック以内に見つかりませんでした。"
+                result["message"] = "No bed found within 32 blocks."
                 self.bot.chat(result["message"])
                 return result
                 
-            # ベッドの位置を取得
+            # Get bed position
             bed_pos = beds[0]
             result["bed_position"] = {
                 "x": bed_pos.x,
@@ -1375,27 +1375,27 @@ class Skills:
                 "z": bed_pos.z
             }
             
-            # ベッドまで移動
+            # Move to bed
             await self.move_to_position(bed_pos.x, bed_pos.y, bed_pos.z)
             
-            # ベッドのブロックを取得
+            # Get bed block
             bed = self.bot.blockAt(bed_pos)
             
             try:
-                # ベッドで寝る
+                # Sleep in the bed
                 await self.bot.sleep(bed)
                 result["success"] = True
-                result["message"] = "ベッドで寝ることに成功しました。"
+                result["message"] = "Successfully slept in the bed."
                 self.bot.chat(result["message"])
                 
             except Exception as e:
-                result["message"] = f"ベッドで寝る際にエラーが発生しました: {str(e)}"
+                result["message"] = f"Error sleeping in bed: {str(e)}"
                 self.bot.chat(result["message"])
                 
             return result
             
         except Exception as e:
-            result["message"] = f"ベッドで寝る際にエラーが発生しました: {str(e)}"
+            result["message"] = f"Error sleeping in bed: {str(e)}"
             self.bot.chat(result["message"])
             import traceback
             traceback.print_exc()
@@ -1403,17 +1403,17 @@ class Skills:
 
     async def move_away(self, distance):
         """
-        現在の位置から任意の方向に指定した距離だけ離れます。
+        Moves away from the current position by the specified distance in a random direction.
         
         Args:
-            distance (int): 移動する距離
+            distance (int): Distance to move
             
         Returns:
-            dict: 結果を含む辞書
-                - success (bool): 移動に成功した場合はTrue、失敗した場合はFalse
-                - message (str): 結果メッセージ
-                - start_position (dict): 開始位置 {x, y, z}
-                - end_position (dict, optional): 移動後の位置 {x, y, z}（成功時のみ）
+            dict: Dictionary containing results
+                - success (bool): True if moved successfully, False otherwise
+                - message (str): Result message
+                - start_position (dict): Starting position {x, y, z}
+                - end_position (dict, optional): Position after moving {x, y, z} (only on success)
         """
         result = {
             "success": False,
@@ -1426,18 +1426,18 @@ class Skills:
         }
         
         try:
-            # 現在位置を取得
+            # Get current position
             current_pos = self.bot.entity.position
             
-            # GoalNearとGoalInvertを使用して現在位置から離れるゴールを設定
+            # Use GoalNear and GoalInvert to set a goal to move away
             if hasattr(self.pathfinder.goals, 'GoalNear') and hasattr(self.pathfinder.goals, 'GoalInvert'):
                 goal = self.pathfinder.goals.GoalNear(current_pos.x, current_pos.y, current_pos.z, distance)
                 inverted_goal = self.pathfinder.goals.GoalInvert(goal)
                 
-                # パスファインダーの設定
+                # Pathfinder config
                 self.bot.pathfinder.setMovements(self.pathfinder.Movements(self.bot))
                 
-                # チートモードの場合はテレポート
+                # Teleport if in cheat mode
                 if hasattr(self.bot.modes, 'isOn') and self.bot.modes.isOn('cheat'):
                     try:
                         move = self.pathfinder.Movements(self.bot)
@@ -1453,18 +1453,18 @@ class Skills:
                                 
                                 self.bot.chat(f"/tp @s {x} {y} {z}")
                                 result["success"] = True
-                                result["message"] = f"現在位置から{distance}ブロック離れた座標({x}, {y}, {z})にテレポートしました。"
+                                result["message"] = f"Teleported to coordinates ({x}, {y}, {z}), {distance} blocks away from the current position."
                                 result["end_position"] = {"x": x, "y": y, "z": z}
                                 self.bot.chat(result["message"])
                                 return result
                     except Exception as e:
-                        print(f"チートモードでの移動計算エラー: {e}")
-                        # 通常の移動を試みる
+                        print(f"Movement calculation error in cheat mode: {e}")
+                        # Try normal movement
                 
-                # パスファインダーを使って移動
+                # Move using pathfinder
                 self.bot.pathfinder.goto(inverted_goal)
                 
-                # 新しい位置を取得
+                # Get new position
                 new_pos = self.bot.entity.position
                 result["end_position"] = {
                     "x": new_pos.x,
@@ -1473,16 +1473,16 @@ class Skills:
                 }
                 
                 result["success"] = True
-                result["message"] = f"現在位置から{distance}ブロック離れた座標({new_pos.x:.1f}, {new_pos.y:.1f}, {new_pos.z:.1f})に移動しました。"
+                result["message"] = f"Moved to coordinates ({new_pos.x:.1f}, {new_pos.y:.1f}, {new_pos.z:.1f}), {distance} blocks away from the current position."
                 self.bot.chat(result["message"])
                 return result
             else:
-                result["message"] = "パスファインダーのゴール機能が利用できません。"
+                result["message"] = "Pathfinder goal functionality is unavailable."
                 self.bot.chat(result["message"])
                 return result
                 
         except Exception as e:
-            result["message"] = f"移動中に予期せぬエラーが発生しました: {str(e)}"
+            result["message"] = f"Unexpected error occurred during movement: {str(e)}"
             self.bot.chat(result["message"])
             import traceback
             traceback.print_exc()
@@ -1490,122 +1490,122 @@ class Skills:
 
     async def avoid_enemies(self, distance=16):
         """
-        周囲の敵対的なエンティティから逃げます。
-        近くの全ての敵対的エンティティから最も離れる場所探し移動します。目的地到着後停止します。
+        Escapes from nearby hostile entities.
+        Looks for a location furthest away from all nearby hostile entities and moves there. Stops after reaching the destination.
         
         Args:
-            distance (int): 逃げる最大距離
+            distance (int): Maximum escape distance
             
         Returns:
-            dict: 結果を含む辞書
+            dict: Dictionary containing results
         """
         result = {
             "success": False,
             "message": ""
         }
         
-        # 近くの全てのエンティティを取得
+        # Get all nearby entities
         nearby_entities = self._get_nearby_entities(distance)
         
-        # 敵対的なエンティティをフィルタリング
+        # Filter hostile entities
         hostile_entities = [entity for entity in nearby_entities if self._is_hostile(entity)]
         
         if not hostile_entities:
-            result["message"] = "近くに敵対的なエンティティはいません。"
+            result["message"] = "No hostile entities nearby."
             self.bot.chat(result["message"])
             return result
             
-        self.bot.chat(f"{len(hostile_entities)}体の敵対的なエンティティから逃げます。")
+        self.bot.chat(f"Escaping from {len(hostile_entities)} hostile entities.")
         
-        # 現在のプレイヤーの位置
+        # Current player position
         player_pos = self.bot.entity.position
         
-        # 各敵からの反発ベクトルを計算（各敵からプレイヤーを遠ざける方向）
+        # Calculate repulsion vector from each enemy (direction moving player away from each enemy)
         escape_vector = {'x': 0, 'y': 0, 'z': 0}
         
         for entity in hostile_entities:
-            # エンティティからプレイヤーへの方向ベクトル
+            # Direction vector from entity to player
             dx = player_pos.x - entity.position.x
             dy = player_pos.y - entity.position.y
             dz = player_pos.z - entity.position.z
             
-            # エンティティとの距離
+            # Distance to entity
             dist = (dx**2 + dy**2 + dz**2) ** 0.5
             
-            if dist < 0.1:  # 極端に近い場合、少しランダムな方向に逃げる
+            if dist < 0.1:  # If extremely close, escape in a slightly random direction
                 import random
                 dx = random.uniform(-1, 1)
                 dz = random.uniform(-1, 1)
                 dist = (dx**2 + dz**2) ** 0.5
             
-            # 距離の逆数を重みとして使用（近い敵からより強く逃げる）
-            weight = 1.0 / (dist + 0.1)  # 0除算を防ぐ
+            # Use inverse distance as weight (escape stronger from closer enemies)
+            weight = 1.0 / (dist + 0.1)  # Prevent division by zero
             
-            # 正規化（単位ベクトル化）して重み付け
-            norm = (dx**2 + dz**2) ** 0.5  # 水平方向の距離
+            # Normalize (convert to unit vector) and apply weight
+            norm = (dx**2 + dz**2) ** 0.5  # Horizontal distance
             if norm > 0:
                 escape_vector['x'] += (dx / norm) * weight
                 escape_vector['z'] += (dz / norm) * weight
         
-        # 最終的な移動距離を計算（ベクトルの正規化）
+        # Calculate final move distance (vector normalization)
         magnitude = (escape_vector['x']**2 + escape_vector['z']**2) ** 0.5
         if magnitude > 0:
             escape_vector['x'] /= magnitude
             escape_vector['z'] /= magnitude
         else:
-            # 全方向から均等に敵がいる場合はランダムな方向に逃げる
+            # Escape in a random direction if enemies are balanced from all directions
             import random
             angle = random.uniform(0, 2 * 3.14159)
             escape_vector['x'] = math.cos(angle)
             escape_vector['z'] = math.sin(angle)
         
-        # 最終的な目標位置を計算（現在位置 + 移動距離 * 方向ベクトル）
-        target_x = player_pos.x + distance * escape_vector['x'] # 敵から離れる方向
-        target_z = player_pos.z + distance * escape_vector['z'] # 敵から離れる方向
+        # Calculate final target position (current pos + move dist * direction vector)
+        target_x = player_pos.x + distance * escape_vector['x'] # Direction away from enemies
+        target_z = player_pos.z + distance * escape_vector['z'] # Direction away from enemies
         
-        # 目的地に移動
-        self.bot.chat(f"x:{target_x:.1f}, z:{target_z:.1f}の方向に逃げます。")
+        # Move to destination
+        self.bot.chat(f"Escaping in direction x:{target_x:.1f}, z:{target_z:.1f}.")
         await self.move_to_position(target_x, player_pos.y, target_z, min_distance=2,canDig=False)
         
         result["success"] = True
-        result["message"] = "敵対的なエンティティから逃げました。"
+        result["message"] = "Escaped from hostile entities."
         self.bot.chat(result["message"])
         return result
 
     async def collect_block(self, block_name, num=1, exclude=None):
         """
-        指定された名前のブロックを指定個数、採掘・収集します。
-        最も近くにある安全に採掘可能なブロックを探し、適切なツールを装備して収集を試みます。
-        座標がわからない特定のブロックの採掘や収集に向いてます。
-        インベントリがいっぱいの場合や適切なツールがない場合などは失敗します。
+        Mines and collects the specified number of the specified block name.
+        Finds the nearest safely minable block, equips appropriate tool and attempts to collect it.
+        Good for mining or collecting specific blocks where coordinates are unknown.
+        Will fail if inventory is full or if lacking appropriate tools.
 
         Args:
-            block_name (str): 収集するブロックの名前 (例: "oak_log", "stone", "coal_ore")。
-                            鉱石の場合、"coal" のように指定しても "coal_ore" や "deepslate_coal_ore" を探します。
-                            "dirt" を指定すると "grass_block" も対象になります。
-            num (int, optional): 収集する目標のブロック数。Defaults to 1.
-            exclude (list[Vec3], optional): 収集対象から除外するブロックの座標 (Vec3オブジェクト) のリスト。
-                                         特定の場所にあるブロックを無視したい場合に使用します。Defaults to None.
+            block_name (str): Name of the block to collect (e.g., "oak_log", "stone", "coal_ore").
+                            For ores, specifying "coal" will search for both "coal_ore" and "deepslate_coal_ore".
+                            Specifying "dirt" will also target "grass_block".
+            num (int, optional): Target number of blocks to collect. Defaults to 1.
+            exclude (list[Vec3], optional): List of block coordinates (Vec3 objects) to exclude from collection.
+                                         Used to ignore blocks at specific locations. Defaults to None.
 
         Returns:
-            dict: 収集結果の詳細を含む辞書。
-                - success (bool): 1つ以上のブロック収集に成功した場合 True、そうでなければ False。
-                - message (str): 処理結果を示すメッセージ。
-                - result (dict): 収集後のインベントリ情報。
-                - block_name (str): 収集しようとした元のブロック名。
-                - error (str, optional): エラーが発生した場合のエラーコード。
+            dict: Dictionary with collection result details.
+                - success (bool): True if at least 1 block collected successfully, False otherwise.
+                - message (str): Message indicating processing result.
+                - result (dict): Inventory info after collection.
+                - block_name (str): Original block name attempted to collect.
+                - error (str, optional): Error code if an error occurred.
         Example:
             >> await skills.collect_block('cobblestone', num=11)
             {
                 "success": True,
-                "message": "11個のcobblestoneを収集しました。",
+                "message": "Collected 11 cobblestone.",
                 "result": {'cobblestone': 11, 'stone_pickaxe': 1},
                 "block_name": "cobblestone"
             }
             >> await skills.collect_block('Jungle Log', num=11)
             {
                 'success': False,
-                'message': '近くにJungle Logが見つかりません。',
+                'message': 'Cannot find Jungle Log nearby.',
                 'result': {'oak_log': 12, 'wooden_pickaxe': 1}
                 'block_name': 'Jungle Log',
                 'error': 'no_blocks_found'
@@ -1617,24 +1617,24 @@ class Skills:
             "result": {},
             "block_name": block_name
         }
-        print(f"{block_name}のブロックを取得します。")
+        print(f"Acquiring {block_name} block.")
         if num < 1:
-            result["message"] = f"無効な収集数量: {num}"
+            result["message"] = f"Invalid collect quantity: {num}"
             result["error"] = "invalid_number"
             print(result["message"])
             return result
         
-        # 同等のブロックタイプをリストに追加
+        # Add equivalent block types to list
         blocktypes = [block_name]
         
-        # 特殊処理: 鉱石ブロックの対応を追加
+        # Special handling: support for ore blocks
         ores = ['coal', 'diamond', 'emerald', 'iron', 'gold', 'lapis_lazuli', 'redstone']
         if block_name in ores:
             blocktypes.append(f"{block_name}_ore")
-        # 深層岩鉱石の対応
+        # Deepslate ore support
         if block_name.endswith('ore'):
             blocktypes.append(f"deepslate_{block_name}")
-        # dirtの特殊処理
+        # Special handling for dirt
         if block_name == 'dirt':
             blocktypes.append('grass_block')
         
@@ -1646,7 +1646,7 @@ class Skills:
                 if found_block:
                     blocks.append(found_block)
             
-            # 除外位置のフィルタリング
+            # Filter excluded locations
             if exclude and blocks:
                 blocks = [block for block in blocks if not any(
                     block.position.x == pos.x and 
@@ -1654,32 +1654,32 @@ class Skills:
                     block.position.z == pos.z 
                     for pos in exclude
                 )]
-            # 安全に採掘可能なブロックのフィルタリング
+            # Filter safely minable blocks
             movements = self.bot.pathfinder.movements
             movements.dontMineUnderFallingBlock = False
             blocks = [block for block in blocks if movements.safeToBreak(block)]
             if not blocks:
-                result["message"] = f"近くに{block_name}が見つかりません。"
+                result["message"] = f"Cannot find {block_name} nearby."
                 result["error"] = "no_blocks_found"
                 break
                 
             block = blocks[0]
-            # 適切なツールを装備a
+            # Equip appropriate tool
             self.bot.tool.equipForBlock(block)
             if self.bot.heldItem:
                 held_item_id = self.bot.heldItem.type
             else:
                 held_item_id = None
             if not block.canHarvest(held_item_id):
-                self.bot.chat(f"{str(block_name)}を採掘するための適切なツールがありません。")
-                result["message"] = f"{block_name}を採掘するための適切なツールがありません。"
+                self.bot.chat(f"No appropriate tool to mine {str(block_name)}.")
+                result["message"] = f"No appropriate tool to mine {block_name}."
                 result["error"] = "no_suitable_tool"
                 print(result["message"])
                 return result
             try:
                 move_result = await self.move_to_position(block.position.x, block.position.y, block.position.z, min_distance=1,dontcreateflow=False)
                 if not move_result["success"]:
-                    result["message"] = f"{block_name}の収集に失敗: {move_result['message']}"
+                    result["message"] = f"Failed to collect {block_name}: {move_result['message']}"
                     result["error"] = "move_failed"
                     print(result["message"])
                     return result
@@ -1690,12 +1690,12 @@ class Skills:
                     await self.auto_light()
             except Exception as e:
                 if str(e) == 'NoChests':
-                    result["message"] = f"{block_name}の収集に失敗: インベントリが一杯で、保管場所がありません。"
+                    result["message"] = f"Failed to collect {block_name}: Inventory is full and no storage space."
                     result["error"] = "inventory_full"
                     print(result["message"])
                     break
                 else:
-                    result["message"] = f"{block_name}の収集に失敗: {str(e)}"
+                    result["message"] = f"Failed to collect {block_name}: {str(e)}"
                     result["error"] = "collection_failed"
                     print(result["message"])
                     continue
@@ -1703,31 +1703,31 @@ class Skills:
         result["result"] = await self.get_inventory_counts()
         result["success"] = True
         if not result["message"]:
-            result["message"] = f"{block_name}を収集しました。"
+            result["message"] = f"Collected {block_name}."
         
         print(result)
         return result
         
     async def should_place_torch(self):
         """
-        松明を設置すべきかどうかを周辺にある松明の有無およびインベントリに松明があるかどうかの基づいて判断します。
+        Determines whether a torch should be placed based on presence of nearby torches and if there are torches in the inventory.
         
         Returns:
-            bool: 松明を設置すべき場合はTrue、そうでない場合はFalse
+            bool: True if a torch should be placed, False otherwise
         """
         pos = self.bot.entity.position
         
-        # 近くの松明を探す
+        # Look for nearby torches
         nearest_torch =await self.get_nearest_block('torch', 6)
         if not nearest_torch:
             nearest_torch = await self.get_nearest_block('wall_torch', 6)
             
-        # 近くに松明がない場合
+        # If no torches nearby
         if not nearest_torch:
-            # 現在位置のブロックを確認
+            # Check current position block
             block = self.bot.blockAt(pos)
             
-            # インベントリに松明があるかチェック
+            # Check if there are torches in inventory
             has_torch = False
             if hasattr(self.bot, 'inventory') and hasattr(self.bot.inventory, 'items'):
                 for item in self.bot.inventory.items():
@@ -1735,48 +1735,48 @@ class Skills:
                         has_torch = True
                         break
                     
-            # 現在位置が空気で、松明を持っている場合に設置可能
+            # Placeable if current pos is air and holding a torch
             return has_torch and block and hasattr(block, 'name') and block.name == 'air'
             
         return False
         
     async def auto_light(self):
         """
-        周りに松明がない場合、インベントリに松明がある場合、現在位置が空気である場合に松明を設置します。
+        Places a torch if there are no torches nearby, if there are torches in the inventory, and if the current position is air.
         
         Returns:
-            bool: 松明を設置した場合はTrue、そうでない場合はFalse
+            bool: True if placed a torch, False otherwise
         """
         try:
             if await self.should_place_torch():
                 pos = self.bot.entity.position
                 Vec3 = require('vec3')
-                # 足元に松明を設置
+                # Place torch at feet
                 floor_pos = Vec3(
                     round(pos.x),
-                    round(pos.y) - 1,  # 足元
+                    round(pos.y) - 1,  # Feet
                     round(pos.z)
                 )
                 
-                # 松明を設置
+                # Place torch
                 result = await self.place_block('torch', floor_pos.x, floor_pos.y + 1, floor_pos.z, 'bottom')
                 
                 if result:
-                    # 最後に松明を設置した位置を記録
+                    # Record the position of the last placed torch
                     self._last_torch_pos = pos.clone()
                     return True
             return False
         except Exception as e:
-            print(f"松明設置エラー: {e}")
+            print(f"Error placing torch: {e}")
             return False
             
     def get_all_registry_blocks(self):
         """
-        レジストリに登録されているすべてのブロック名を取得します。
-        デバッグ目的で使用します。
+        Gets all block names registered in the registry.
+        Used for debugging purposes.
         
         Returns:
-            list: ブロック名のリスト
+            list: List of block names
         """
         block_names = []
         try:
@@ -1786,7 +1786,7 @@ class Skills:
                     
             return sorted(block_names)
         except Exception as e:
-            print(f"ブロック名取得エラー: {e}")
+            print(f"Error getting block names: {e}")
             return []
         
     async def move_to_position(self, x, y, z, min_distance=2,
@@ -1797,35 +1797,35 @@ class Skills:
                                dontMineUnderFaillingBlock=True,
                                dontMoveUnderLiquid=True,
                                onlyCheckPath=False,
-                               move_timeout=180): # タイムアウト引数を追加
+                               move_timeout=180): # Added timeout argument
         """
-        指定された位置に移動します。canDig=Trueの場合、障害となるブロックを採掘しながら移動します。
-        指定時間内に移動が完了しない、または到達できない場合は場合はタイムアウトします。
+        Moves to the specified position. If canDig=True, mines blocking blocks while moving.
+        If movement is not completed within the specified time, or if unreachable, it will timeout.
 
         Args:
-            x (float): 移動先のX座標
-            y (float): 移動先のY座標
-            z (float): 移動先のZ座標
-            min_distance (int): 目標位置からの最小距離。デフォルトは2
-            canDig (bool): 移動の障害となるブロックを破壊するかどうか。デフォルトはTrue
-            canPlaceOn (bool): 移動時にブロックの設置を許可するかどうか。デフォルトはTrue
-            allow1by1towers (bool): 1x1の塔を作って登ることを許可するかどうか。デフォルトはFalse
-            dontcreateflow (bool):  移動の障害となる液体ブロックに接触するブロックを掘らないかどうか。デフォルトはTrue
-            dontMineUnderFaillingBlock (bool):砂などの落下ブロックの下で掘るのを許可するか。デフォルトはTrue
-            dontMoveUnderLiquid (bool):移動先として指定された座標が、液体ブロックの場合、エラーを返すかどうか。デフォルトはTrue
-            onlyCheckPath (bool): 移動先に移動可能かどうかをチェックする。デフォルトはFalse
-            move_timeout (int): 移動のタイムアウト時間（秒）。デフォルトは60
+            x (float): Destination X coordinate
+            y (float): Destination Y coordinate
+            z (float): Destination Z coordinate
+            min_distance (int): Minimum distance from target position. Default 2
+            canDig (bool): Whether to destroy blocks obstructing movement. Default True
+            canPlaceOn (bool): Whether to allow placing blocks during movement. Default True
+            allow1by1towers (bool): Whether to allow building 1x1 towers to climb. Default False
+            dontcreateflow (bool): Whether to avoid mining blocks touching liquid blocks that obstruct movement. Default True
+            dontMineUnderFaillingBlock (bool): Whether to allow digging under falling blocks like sand. Default True
+            dontMoveUnderLiquid (bool): Whether to return an error if the specified destination coordinate is a liquid block. Default True
+            onlyCheckPath (bool): Check if it is possible to move to the destination. Default False
+            move_timeout (int): Movement timeout time (seconds). Default 60
 
         Returns:
-            dict: 移動結果を含む辞書
-                - success (bool): 移動に成功した場合はTrue、失敗した場合はFalse
-                - error (str): 移動に失敗した場合のエラーコード(path_not_found, path_timeout, move_timeout, liquid_block, unexpected_error, move_failed)
-                - message (str): 移動結果のメッセージ
-                - position (dict): 移動後の座標 (例: {"x": 10, "y": 20, "z": 30})
+            dict: Dictionary containing movement results
+                - success (bool): True if moved successfully, False otherwise
+                - error (str): Error code on movement failure (path_not_found, path_timeout, move_timeout, liquid_block, unexpected_error, move_failed)
+                - message (str): Movement result message
+                - position (dict): Coordinates after movement (e.g. {"x": 10, "y": 20, "z": 30})
         """
         if not onlyCheckPath:
-            print(f"{x}, {y}, {z}に移動します。")
-        # 現在位置と目標位置を取得
+            print(f"Moving to {x}, {y}, {z}.")
+        # Get current pos and target pos
         current_pos = self.bot.entity.position
 
         result = {
@@ -1839,15 +1839,15 @@ class Skills:
             }
         }
 
-        # 現在位置と目標位置の距離を計算
+        # Calculate distance between current pos and target pos
         distance_to_target = ((current_pos.x - x) ** 2 +
                               (current_pos.y - y) ** 2 +
                               (current_pos.z - z) ** 2) ** 0.5
-        # 既に目標位置に十分近い場合は移動をスキップ
+        # Skip movement if already close enough to target pos
         if distance_to_target <= min_distance:
             result["success"] = True
-            result["message"] = f"{x}, {y}, {z} に十分近いため移動をスキップします。"
-            # positionを更新
+            result["message"] = f"Skipping movement, already close enough to {x}, {y}, {z}."
+            # Update position
             result["position"] = { "x": current_pos.x, "y": current_pos.y, "z": current_pos.z }
             print(result["message"])
             return result
@@ -1855,13 +1855,13 @@ class Skills:
             Vec3 = require('vec3')
             target_block = self.bot.blockAt(Vec3(x, y, z))
             if target_block and (target_block.name == 'water' or target_block.name == 'lava'):
-                result["message"] = f"目標位置 {x}, {y}, {z} は液体ブロックです。溺れる・焼け死ぬ可能性があるため、移動を中止します。"
+                result["message"] = f"Target position {x}, {y}, {z} is a liquid block. Canceling movement to avoid drowning/burning."
                 result["error"] = "liquid_block"
                 print(result["message"])
                 return result
 
         try:
-            # パスファインダーの動きを設定
+            # Configure pathfinder movements
             movements = self.pathfinder.Movements(self.bot)
             movements.canDig = canDig
             movements.dontCreateFlow = dontcreateflow
@@ -1869,52 +1869,52 @@ class Skills:
             movements.canPlaceOn = canPlaceOn
             movements.allow1by1towers = allow1by1towers
             self.bot.pathfinder.setMovements(movements)
-            # 目標位置を設定
+            # Set target pos
             goal = self.pathfinder.goals.GoalNear(x, y, z, min_distance)
-            # パスを取得
+            # Get path
             path = self.bot.pathfinder.getPathTo(movements,goal)
             if path.status == "error":
-                result["message"] = f"目標位置に到達できる経路を生成できませんでした。目的地が水中・溶岩にあるか、現在の装備では採掘出来ないブロック・空間に阻まれています"
+                result["message"] = f"Could not generate a path to the target location. The destination might be underwater/in lava, or blocked by blocks/spaces unminable with current equipment."
                 result["error"] = "path_not_found"
                 self.bot.chat(result["message"])
                 return result
             elif path.status == "timeout":
-                result["message"] = f"パスの生成がタイムアウトしました。目標位置が遠すぎる可能性があります"
+                result["message"] = f"Path generation timed out. Target location might be too far."
                 result["error"] = "path_timeout"
                 self.bot.chat(result["message"])
                 return result
             if onlyCheckPath:
                 result["success"] = True
-                result["message"] = f"目標位置 {x}, {y}, {z} に移動可能です。"
+                result["message"] = f"Can move to target location {x}, {y}, {z}."
                 return result
-            # 目標に向かう
+            # Move to target
             self.bot.pathfinder.setGoal(goal)
             await asyncio.sleep(1)
 
             last_position = None
             stuck_time = 0
             temp_free_space = None
-            move_start_time = asyncio.get_event_loop().time() # 移動開始時間を記録
+            move_start_time = asyncio.get_event_loop().time() # Record start time
             while self.bot.pathfinder.isMoving() or self.bot.pathfinder.isMining() or self.bot.pathfinder.isBuilding():
-                # --- タイムアウトチェック ---
+                # --- Timeout check ---
                 current_time = asyncio.get_event_loop().time()
                 if (current_time - move_start_time) > move_timeout:
-                    print(f"タイムアウトしました。移動可能最大時間を超過しました。動作を途中で停止します ({move_timeout}秒)。")
-                    self.bot.pathfinder.setGoal(None) # 目的地をリセット
-                    await asyncio.sleep(1) # ゴールリセットの反映を待つ
+                    print(f"Timed out. Exceeded max movement time. Stopping action midway ({move_timeout}s).")
+                    self.bot.pathfinder.setGoal(None) # Reset goal
+                    await asyncio.sleep(1) # Wait for goal reset
                     result["success"] = False
-                    result["message"] = f"タイムアウトしました。移動可能最大時間を超過しました。動作を途中で停止します ({move_timeout}秒)。"
+                    result["message"] = f"Timed out. Exceeded max movement time. Stopping action midway ({move_timeout}s)."
                     result["error"] = "move_timeout"
-                    # 現在位置を記録
+                    # Record current pos
                     current_pos_timeout = await self.get_bot_position()
                     result["position"] = { "x": current_pos_timeout[0], "y": current_pos_timeout[1], "z": current_pos_timeout[2] }
                     return result
-                # --- ここまで追加 ---
+                # --- End timeout check ---
                 
                 mining = self.bot.pathfinder.isMining()
                 building = self.bot.pathfinder.isBuilding()
                 current_position = self.bot.entity.position
-                # スタック検出ロジック
+                # Stuck detection logic
                 if not mining and not building:
                     if last_position and (
                         abs(current_position.x - last_position.x) < 0.01 and
@@ -1925,76 +1925,76 @@ class Skills:
                     else:
                         stuck_time = 0
 
-                    # 2秒以上同じ位置でスタックしている場合
+                    # If stuck in same position for 2+ seconds
                     if stuck_time >= 2:
-                        self.bot.chat("スタックを検出しました。解消を試みます。")
+                        self.bot.chat("Stuck detected. Attempting to resolve.")
                         free_space = None
                         search_distance = 100
-                        while free_space is None and search_distance < 500: # 無限ループ防止
+                        while free_space is None and search_distance < 500: # Prevent infinite loop
                             free_space = await self.get_nearest_free_space(X_size=1,Y_size=2,Z_size=1,distance=search_distance)
                             if free_space:
                                 break
                             search_distance += 100
 
                         if free_space is None:
-                            self.bot.chat("近くに一時退避できるスペースが見つかりません。移動を中断します。")
-                            self.bot.pathfinder.setGoal(None) # 目的地リセット
+                            self.bot.chat("Cannot find a temporary safe space nearby. Aborting movement.")
+                            self.bot.pathfinder.setGoal(None) # Reset goal
                             await asyncio.sleep(1)
                             result["success"] = False
-                            result["message"] = "スタック解消中に退避スペースが見つからず、移動を中断しました。"
+                            result["message"] = "Could not find a safe space while resolving stuck issue, movement aborted."
                             result["error"] = "stuck_no_space"
                             current_pos_stuck = await self.get_bot_position()
                             result["position"] = { "x": current_pos_stuck[0], "y": current_pos_stuck[1], "z": current_pos_stuck[2] }
                             return result
 
                         if temp_free_space and temp_free_space.x == free_space.x and temp_free_space.y == free_space.y and temp_free_space.z == free_space.z:
-                            # 一時的な移動で解消出来なければワープ (これはBotの能力に依存、通常は推奨されない)
+                            # Warp if temporary movement cannot resolve (Depends on Bot abilities, normally not recommended)
                             # self.bot.chat(f"/tp bot {free_space.x} {free_space.y} {free_space.z}")
-                            self.bot.chat("一時退避を試みましたがスタックが解消できませんでした。移動を中断します。")
+                            self.bot.chat("Attempted temporary escape but could not resolve stuck issue. Aborting movement.")
                             self.bot.pathfinder.setGoal(None)
                             await asyncio.sleep(1)
                             result["success"] = False
-                            result["message"] = "スタック解消に失敗しました。移動を中断します。"
+                            result["message"] = "Failed to resolve stuck issue. Movement aborted."
                             result["error"] = "stuck_unresolved"
                             current_pos_stuck_fail = await self.get_bot_position()
                             result["position"] = { "x": current_pos_stuck_fail[0], "y": current_pos_stuck_fail[1], "z": current_pos_stuck_fail[2] }
                             return result
                         else:
-                            # 一時的な目標地点に移動
+                            # Move to temporary target location
                             temp_goal = self.pathfinder.goals.GoalNear(free_space.x, free_space.y, free_space.z, 0)
                             self.bot.pathfinder.setGoal(temp_goal)
                             await asyncio.sleep(1)
                             temp_free_space = free_space
-                            self.bot.chat(f"一時的に {free_space.x:.1f}, {free_space.y:.1f}, {free_space.z:.1f} へ移動します。")
-                            await asyncio.sleep(2) # 一時目標への移動を待つ
+                            self.bot.chat(f"Temporarily moving to {free_space.x:.1f}, {free_space.y:.1f}, {free_space.z:.1f}.")
+                            await asyncio.sleep(2) # Wait for move to temporary target
 
-                        # 元の目標地点に再設定
+                        # Reset to original target location
                         self.bot.pathfinder.setGoal(goal)
                         await asyncio.sleep(1)
-                        self.bot.chat("元の目標への移動を再開します。")
+                        self.bot.chat("Resuming movement to original target.")
                         await asyncio.sleep(0.5)
                         stuck_time = 0
-                        move_start_time = asyncio.get_event_loop().time() # スタック解消後、タイマーリセット
+                        move_start_time = asyncio.get_event_loop().time() # Reset timer after resolving stuck
 
                 last_position = current_position
-                await asyncio.sleep(0.5) # ループのインターバル
-            # 移動完了後、パスファインダーのゴールをリセット
+                await asyncio.sleep(0.5) # Loop interval
+            # Reset pathfinder goal after move completes
             self.bot.pathfinder.setGoal(None)
             await asyncio.sleep(1)
-            # --- 移動完了後の処理 ---
+            # --- Post-move processing ---
             bot_x, bot_y, bot_z = await self.get_bot_position()
-            # 目標位置との距離を計算 (インデント修正)
+            # Calculate distance to target location (fixed indent)
             final_distance_xy = ((bot_x - x) ** 2 + (bot_z - z) ** 2) ** 0.5
             final_distance_y = abs(bot_y - y) - 2
             if final_distance_xy <= min_distance+1:
                 result["success"] = True
-                result["message"] = f" {x}, {y}, {z} に到達しました"
+                result["message"] = f" Arrived at {x}, {y}, {z}"
                 
             else:
                 print(f"final_distance_xy: {final_distance_xy}\nfinal_distance_y: {final_distance_y}\nmin_distance: {min_distance}\n")
-                # isMoving()がFalseでも距離が遠い場合 (パスの終点が目標から遠いなど)
+                # If distance is far even with isMoving() being False (e.g. path end point is far from target)
                 result["success"] = False
-                result["message"] = f"{x}, {y}, {z} に到達できませんでした。現在の位置は {bot_x:.1f}, {bot_y:.1f}, {bot_z:.1f}  です。一時的なエラーなので、再度実行することで到達できる可能性があります"
+                result["message"] = f"Could not reach {x}, {y}, {z}. Current position is {bot_x:.1f}, {bot_y:.1f}, {bot_z:.1f}. This is a temporary error, trying again may succeed."
                 result["error"] = "move_failed"
             result["position"] = {
                 "x": bot_x,
@@ -2004,16 +2004,16 @@ class Skills:
             print(result["message"])
 
         except Exception as e:
-            result["message"] = f"移動中に予期せぬエラーが発生しました: {str(e)}"
+            result["message"] = f"Unexpected error occurred during movement: {str(e)}"
             self.bot.chat(result["message"])
             import traceback
             traceback.print_exc()
             result["error"] = "unexpected_error"
-            # エラー発生時の位置を記録
+            # Record pos at time of error
             try:
                 error_pos = await self.get_bot_position()
                 result["position"] = { "x": error_pos[0], "y": error_pos[1], "z": error_pos[2] }
-            except: # get_bot_positionも失敗する可能性
+            except: # get_bot_position might also fail
                  result["position"] = {"x": None, "y": None, "z": None}
 
 
@@ -2021,22 +2021,22 @@ class Skills:
         
     async def smelt_item(self, item_name, num=1):
         """
-        32ブロック以内にある「かまど」または、インベントリに「かまど」がある場合、「かまど」にアイテムを入れて精錬します。燃料として石炭、木炭、木材を使用します。
-        精錬が完了するまで待機し、完了したアイテムを回収します。
+        Smelts items by putting them in a 'furnace' within 32 blocks, or in inventory. Coal, charcoal, and wood can be used as fuel.
+        Waits for smelting to complete and collects the items.
         
         Args:
-            item_name (str): 精錬するアイテム名（例: "raw_iron", "raw_copper", "beef"など）
-            num (int): 精錬するアイテムの数。デフォルトは1
+            item_name (str): Name of item to smelt (e.g. "raw_iron", "raw_copper", "beef", etc)
+            num (int): Number of items to smelt. Default 1
             
         Returns:
-            dict: 結果を含む辞書
-                - success (bool): 精錬に成功した場合はTrue、失敗した場合はFalse
-                - message (str): 結果メッセージ
-                - smelted (int): 精錬したアイテムの数
-                - item_name (str): 精錬したアイテム名
-                - error (str, optional): エラーがある場合のエラーコード
+            dict: Dictionary containing results
+                - success (bool): True if smelted successfully, False otherwise
+                - message (str): Result message
+                - smelted (int): Number of smelted items
+                - item_name (str): Smelted item name
+                - error (str, optional): Error code if errors occurred
         """
-        self.bot.chat(f"{item_name}を精錬します。")
+        self.bot.chat(f"Smelting {item_name}.")
         result = {
             "success": False,
             "message": "",
@@ -2044,21 +2044,21 @@ class Skills:
             "item_name": item_name,
         }
         
-        # 精錬可能なアイテムか確認
+        # Check if item is smeltable
         is_smeltable = self._is_smeltable(item_name)
         if not is_smeltable:
-            result["message"] = f"{item_name}は精錬できません。「raw_」で始まる生の鉱石や食材を指定してください。"
+            result["message"] = f"Cannot smelt {item_name}. Specify raw ores starting with 'raw_ ' or foodstuff."
             result["error"] = "not_smeltable"
             self.bot.chat(result["message"])
             return result
             
-        # かまどを探す
+        # Look for furnace
         placed_furnace = False
         furnace_block = await self.get_nearest_block('furnace', 32)
         if not furnace_block:
-            # かまどを持っているか確認
+            # Check if own furnace
             if (await self.get_inventory_counts()).get('furnace', 0) > 0:
-                # かまどを設置
+                # Place furnace
                 pos = await self.get_nearest_free_space(X_size=1,Z_size=1,distance=15)
                 place_result = await self.place_block('furnace', pos.x, pos.y, pos.z)
                 await asyncio.sleep(1)
@@ -2066,17 +2066,17 @@ class Skills:
                     furnace_block = await self.get_nearest_block('furnace', 32)
                     placed_furnace = True
                 else:
-                    result["message"] = "かまどの設置に失敗しました"
+                    result["message"] = "Failed to place furnace"
                     result["error"] = "furnace_placement_failed"
                     self.bot.chat(result["message"])
                     return result
             else:
-                result["message"] = f"近くにかまどがなく、インベントリにもかまどがありません"
+                result["message"] = f"No furnace nearby and no furnace in inventory"
                 result["error"] = "no_furnace"
                 self.bot.chat(result["message"])
                 return result
                 
-        # かまどまで移動
+        # Move to furnace
         if self.bot.entity.position.distanceTo(furnace_block.position) > 4:
             await self.move_to_position(
                 furnace_block.position.x, 
@@ -2085,52 +2085,52 @@ class Skills:
                 2
             )
             
-        # かまどを開く
+        # Open the furnace
         try:
-            # かまどを見る
+            # Look at furnace
             self.bot.lookAt(furnace_block.position)
             
-            # かまどを開く
+            # Open furnace
             furnace = self.bot.openFurnace(furnace_block)
             
-            # 既に精錬中のアイテムがあるか確認
+            # Check if there is already an item smelting
             input_item = furnace.inputItem()
             if input_item and input_item.type and input_item.count > 0:
                 if self._get_item_name(input_item.type) != item_name:
-                    result["message"] = f"かまどは既に{self._get_item_name(input_item.type)}を精錬中です"
+                    result["message"] = f"Furnace is already smelting {self._get_item_name(input_item.type)}"
                     result["error"] = "already_smelting"
                     furnace.close()
                     
-                    # 設置したかまどを回収
+                    # Collect placed furnace
                     if placed_furnace:
                         await self.collect_block('furnace', 1)
                         
                     self.bot.chat(result["message"])
                     return result
                     
-            # 精錬するアイテムを持っているか確認
+            # Check if holding item to smelt
             inv_counts = await self.get_inventory_counts()
             if not inv_counts.get(item_name, 0) or inv_counts.get(item_name, 0) < num:
-                result["message"] = f"精錬するための{item_name}が足りません"
+                result["message"] = f"Not enough {item_name} to smelt"
                 result["error"] = "insufficient_items"
                 furnace.close()
                 
-                # 設置したかまどを回収
+                # Collect placed furnace
                 if placed_furnace:
                     await self.collect_block('furnace', 1)
                     
                 self.bot.chat(result["message"])
                 return result
                 
-            # 燃料を確認・投入
+            # Check and insert fuel
             if not furnace.fuelItem() or furnace.fuelItem().count <= 0:
                 fuel = self._get_smelting_fuel()
                 if not fuel:
-                    result["message"] = f"{item_name}を精錬するための燃料（石炭、木炭、木材など）がありません"
+                    result["message"] = f"No fuel (coal, charcoal, wood, etc) to smelt {item_name}"
                     result["error"] = "no_fuel"
                     furnace.close()
                     
-                    # 設置したかまどを回収
+                    # Collect placed furnace
                     if placed_furnace:
                         await self.collect_block('furnace', 1)
                         
@@ -2138,28 +2138,28 @@ class Skills:
                     print(result)
                     return result
                     
-                # 燃料を投入
+                # Insert fuel
                 furnace.putFuel(fuel.type, None, fuel.count)
-                self.bot.chat(f"かまどに{fuel.count}個の{fuel.name}を燃料として投入しました")
-                print(f"かまどに{fuel.count}個の{fuel.name}を燃料として投入しました")
+                self.bot.chat(f"Inserted {fuel.count} {fuel.name} into furnace as fuel")
+                print(f"Inserted {fuel.count} {fuel.name} into furnace as fuel")
                 
-            # 精錬するアイテムをかまどに入れる
+            # Place item to smelt into furnace
             item_id = self._get_item_id(item_name)
             furnace.putInput(item_id, None, num)
             
-            # 精錬が完了するまで待機して結果を収集
+            # Wait until smelting is complete and collect results
             total_smelted = 0
             collected_last = True
             smelted_item = None
             
-            # 少し待機して精錬が始まるのを待つ
+            # Wait a little for smelting to begin
             await asyncio.sleep(0.2)
             
             while total_smelted < num:
-                # 10秒ごとに確認
+                # Check every 10 seconds
                 await asyncio.sleep(10)
                 
-                # 結果を確認
+                # Check results
                 collected = False
                 if furnace.outputItem():
                     smelted_item = furnace.takeOutput()
@@ -2167,29 +2167,29 @@ class Skills:
                         total_smelted += smelted_item.count
                         collected = True
                         
-                # 何も取得できなかった場合
+                # If nothing could be obtained
                 if not collected and not collected_last:
-                    break  # 前回も今回も何も取得できなかった場合は終了
+                    break  # End if nothing obtained last time and this time
                     
                 collected_last = collected
                 
-            # かまどを閉じる
+            # Close furnace
             furnace.close()
             
-            # 設置したかまどを回収
+            # Collect placed furnace
             if placed_furnace:
                 await self.collect_block('furnace', 1)
                 
-            # 結果を設定
+            # Set results
             if total_smelted == 0:
-                result["message"] = f"{item_name}の精錬に失敗しました"
+                result["message"] = f"Failed to smelt {item_name}"
                 result["error"] = "smelting_failed"
                 self.bot.chat(result["message"])
                 print(result)
                 return result
                 
             if total_smelted < num:
-                result["message"] = f"{num}個中{total_smelted}個の{item_name}を精錬しました"
+                result["message"] = f"Smelted {total_smelted} out of {num} {item_name}"
                 result["success"] = True
                 result["smelted"] = total_smelted
                 
@@ -2200,10 +2200,10 @@ class Skills:
                 print(result)
                 return result
                 
-            result["message"] = f"{item_name}を{total_smelted}個精錬しました"
+            result["message"] = f"Smelted {total_smelted} {item_name}"
             if smelted_item:
                 result["smelted_item_name"] = self._get_item_name(smelted_item.type)
-                result["message"] = f"{item_name}を精錬し、{total_smelted}個の{self._get_item_name(smelted_item.type)}を取得しました"
+                result["message"] = f"Smelted {item_name} and obtained {total_smelted} {self._get_item_name(smelted_item.type)}"
                 
             result["success"] = True
             result["smelted"] = total_smelted
@@ -2212,7 +2212,7 @@ class Skills:
             return result
             
         except Exception as e:
-            result["message"] = f"かまど操作中にエラーが発生しました: {str(e)}"
+            result["message"] = f"Error occurred during furnace operation: {str(e)}"
             result["error"] = "furnace_error"
             
             import traceback
@@ -2220,7 +2220,7 @@ class Skills:
             print(result)
             self.bot.chat(result["message"])
             
-            # 設置したかまどを回収
+            # Collect placed furnace
             if placed_furnace:
                 try:
                     await self.collect_block('furnace', 1)
@@ -2231,16 +2231,16 @@ class Skills:
     
     async def clear_nearest_furnace(self):
         """
-        最も近いかまどを見つけ、中のアイテムをすべて取り出します。
+        Finds the nearest furnace and takes out all items inside.
         
         Returns:
-            dict: 結果を含む辞書
-                - success (bool): 操作に成功した場合はTrue、失敗した場合はFalse
-                - message (str): 結果メッセージ
-                - items (list): 回収したアイテムのリスト
+            dict: Dictionary containing results
+                - success (bool): True if operation successful, False otherwise
+                - message (str): Result message
+                - items (list): List of collected items
         """
-        self.bot.chat("近くのかまどの中のアイテムを取り出します")
-        print("近くのかまどの中のアイテムを取り出します")
+        self.bot.chat("Taking items out of the nearest furnace")
+        print("Taking items out of the nearest furnace")
         result = {
             "success": False,
             "message": "",
@@ -2248,14 +2248,14 @@ class Skills:
         }
         
         try:
-            # 最も近いかまどを見つける
+            # Find the nearest furnace
             furnace_block = await self.get_nearest_block('furnace', 32)
             if not furnace_block:
-                result["message"] = "近くにかまどが見つかりません"
+                result["message"] = "Cannot find a furnace nearby"
                 result["error"] = "no_furnace"
                 return result
                 
-            # かまどまでの距離を確認
+            # Check distance to furnace
             if self.bot.entity.position.distanceTo(furnace_block.position) > 4:
                 move_result = await self.move_to_position(
                     furnace_block.position.x,
@@ -2264,14 +2264,14 @@ class Skills:
                     2
                 )
                 if not move_result["success"]:
-                    result["message"] = "かまどに到達できませんでした"
+                    result["message"] = "Could not reach the furnace"
                     result["error"] = "cannot_reach"
                     return result
             
-            # かまどを開く
+            # Open furnace
             furnace = self.bot.openFurnace(furnace_block)
             
-            # アイテムを取り出す
+            # Take out items
             smelted_item = None
             input_item = None 
             fuel_item = None
@@ -2300,10 +2300,10 @@ class Skills:
                         "count": fuel_item.count
                     })
                     
-            # かまどを閉じる
+            # Close furnace
             furnace.close()
             
-            # アイテムを名前でグループ化して合計を計算
+            # Group items by name and calculate total
             item_totals = {}
             
             for item in result["items"]:
@@ -2311,7 +2311,7 @@ class Skills:
                 count = item["count"]
                 item_totals[name] = item_totals.get(name, 0) + count
                 
-            # 合計を新しいitemsリストに変換
+            # Convert totals to new items list
             grouped_items = []
             for name, count in item_totals.items():
                 grouped_items.append({
@@ -2319,53 +2319,53 @@ class Skills:
                     "count": count
                 })
                 
-            # 結果を更新
+            # Update result
             result["items"] = grouped_items
             
-            # 結果テキストを生成
+            # Generate result text
             text = ""
             for item in grouped_items:
-                text += f"{item['count']}個の{item['name']}、"
-            text = text.rstrip("、")
+                text += f"{item['count']} {item['name']}, "
+            text = text.rstrip(", ")
             if text=="" :
-                result["message"] = "かまどから回収を行いましたが、かまどは空でした"
+                result["message"] = "Attempted collection from furnace, but it was empty"
             else:
-                result["message"] = f"かまどから{text}を回収しました"
+                result["message"] = f"Collected {text} from furnace"
             result["success"] = True
             
             return result
             
         except Exception as e:
-            result["message"] = f"かまどのクリア中にエラーが発生しました: {str(e)}"
+            result["message"] = f"Error occurred while clearing furnace: {str(e)}"
             import traceback
             traceback.print_exc()
             return result
         
     async def attack_nearest(self, mob_type, kill=True,pickup_item=True):
         """
-        指定したタイプのモブを攻撃します。
+        Attacks a specified type of mob.
         
         Args:
-            mob_type: 攻撃するモブのタイプ
-            kill: モブが死ぬまで攻撃し続けるかどうか（デフォルトはTrue）
-            pickup_item: モブが死んだ時にドロップアイテムを拾うかどうか（デフォルトはTrue）
+            mob_type: The type of mob to attack
+            kill: Whether to continue attacking until the mob dies (default True)
+            pickup_item: Whether to pick up dropped items when the mob dies (default True)
         Returns:
-            dict: 結果を含む辞書
-                - success (bool): 攻撃に成功した場合はTrue、失敗した場合はFalse 
-                - message (str): 結果メッセージ
-                - mob_type (str): 攻撃したモブのタイプ
+            dict: Dictionary containing results
+                - success (bool): True if attack successful, False otherwise 
+                - message (str): Result message
+                - mob_type (str): The type of mob attacked
         """
-        self.bot.chat(f"{mob_type}を攻撃します。")
-        print(f"{mob_type}を攻撃します。")
+        self.bot.chat(f"Attacking {mob_type}.")
+        print(f"Attacking {mob_type}.")
         result = {
             "success": False,
             "message": "",
             "mob_type": mob_type
         }
         
-        # 近くのエンティティを取得
+        # Get nearby entities
         nearby_entities = self._get_nearby_entities(24)
-        # 指定されたmob_typeと一致するエンティティを検索
+        # Search for entity matching the specified mob_type
         mob = None
         for entity in nearby_entities:
             if hasattr(entity, 'name') and entity.name == mob_type:
@@ -2378,102 +2378,102 @@ class Skills:
             result["mob_type"] = mob_type
             return result
         
-        result["message"] = f'{mob_type}が見つかりませんでした。'
+        result["message"] = f'Could not find {mob_type}.'
         self.bot.chat(result["message"])
         print(result)
         return result
 
     async def attack_entity(self, entity, kill=True,pickup_item=True):
         """
-        指定したエンティティを攻撃します。
+        Attacks a specified entity.
         
         Args:
-            entity: 攻撃するエンティティ
-            kill: エンティティが死ぬまで攻撃し続けるかどうか（デフォルトはTrue）
-            pickup_item: エンティティが死んだ時にドロップアイテムを拾うかどうか（デフォルトはTrue）
+            entity: The entity to attack
+            kill: Whether to continue attacking until the entity dies (default True)
+            pickup_item: Whether to pick up dropped items when the entity dies (default True)
         Returns:
-            dict: 結果を含む辞書
-                - success (bool): 攻撃に成功した場合はTrue、失敗した場合はFalse
-                - message (str): 結果メッセージ
-                - entity_name (str): 攻撃したエンティティの名前
-                - killed (bool, optional): エンティティを倒したかどうか
+            dict: Dictionary containing results
+                - success (bool): True if attack successful, False otherwise
+                - message (str): Result message
+                - entity_name (str): Name of the attacked entity
+                - killed (bool, optional): Whether the entity was killed
         """
-        self.bot.chat(f"{entity.name}を攻撃します。")
-        print(f"{entity.name}を攻撃します。")
+        self.bot.chat(f"Attacking {entity.name}.")
+        print(f"Attacking {entity.name}.")
         result = {
             "success": False,
             "message": "",
-            "entity_name": entity.name if hasattr(entity, 'name') else "不明なエンティティ"
+            "entity_name": entity.name if hasattr(entity, 'name') else "Unknown Entity"
         }
         
-        # エンティティの存在確認
+        # Check if entity exists
         if not entity or not hasattr(entity, 'position') or not entity.position:
-            result["message"] = "攻撃対象のエンティティが無効です"
+            result["message"] = "Invalid target entity"
             result["error"] = "invalid_entity"
             self.bot.chat(result["message"])
             print(result)
             return result
         
-        # 最高攻撃力の武器を装備
+        # Equip highest attack weapon
         wepon = await self._equip_highest_attack()
         if not wepon:
-            result["message"] = "武器になるものがインベントリにありません。"
+            result["message"] = "No weapon in inventory."
             result["error"] = "no_weapon"
             self.bot.chat(result["message"])
             print(result)
             return result
         
-        # エンティティの位置を保存
+        # Save entity position
         position = entity.position
         
         if not kill:
-            # エンティティが遠すぎる場合は近づく
+            # Move closer if entity is too far
             try:
                 if self.bot.entity.position.distanceTo(position) > 5:
                     await self.move_to_position(position.x, position.y, position.z)
             except Exception as e:
-                result["message"] = f"エンティティへの移動中にエラーが発生しました: {str(e)}"
+                result["message"] = f"Error occurred moving to entity: {str(e)}"
                 result["error"] = "movement_error"
                 self.bot.chat(result["message"])
                 print(result)
                 return result
                 
-            # 一度だけ攻撃
+            # Attack once
             try:
                 self.bot.attack(entity)
                 result["success"] = True
-                result["message"] = f"{entity.name}を1度攻撃しました"
+                result["message"] = f"Attacked {entity.name} once"
                 result["killed"] = False
                 self.bot.chat(result["message"])
                 print(result)
                 return result
             except Exception as e:
-                result["message"] = f"攻撃中にエラーが発生しました: {str(e)}"
+                result["message"] = f"Error occurred during attack: {str(e)}"
                 result["error"] = "attack_error"
                 self.bot.chat(result["message"])
                 print(result)
                 return result
         else:
-            # PVPモジュールを使用
+            # Use PVP module
             self.bot.pvp.attack(entity)
             
-            # エンティティが死ぬまで待機
+            # Wait until entity dies
             while self._is_entity_nearby(entity, 24):
                 await asyncio.sleep(1)
                 if hasattr(self.bot, 'interrupt_code') and self.bot.interrupt_code:
                     self.bot.pvp.stop()
-                    result["message"] = "攻撃が中断されました"
+                    result["message"] = "Attack interrupted"
                     self.bot.chat(result["message"])
                     print(result)
                     return result
             self.bot.pvp.stop()
             
             result["success"] = True
-            result["message"] = f"{entity.name}を倒しました"
+            result["message"] = f"Killed {entity.name}"
             result["killed"] = True
             self.bot.chat(result["message"])
             print(result)
-            # 周囲のアイテムを拾う
+            # Pick up surrounding items
             if pickup_item:
                 pickup_result = await self.pickup_nearby_items()
                 result["message"] += " "+ pickup_result["message"]
@@ -2483,17 +2483,17 @@ class Skills:
 
     async def defend_self(self, range=9):
         """
-        周囲の敵対的なモブから自身を守ります。
-        敵対的なモブがいなくなるまで攻撃し続けます。
-        もし武器を装備していない場合は、敵から逃げます。
+        Defends self against surrounding hostile mobs.
+        Continues attacking until hostile mobs are gone.
+        If no weapon is equipped, will escape from enemies.
         Args:
-            range: モブを探す範囲。デフォルトは9
+            range: The distance to look for mobs. Default 9
             
         Returns:
-            dict: 結果を含む辞書
-                - success (bool): 防衛に成功した場合はTrue、敵がいない場合はFalse
-                - message (str): 結果メッセージ
-                - enemies_killed (int): 倒した敵の数
+            dict: Dictionary containing results
+                - success (bool): True if successfully defended, False if no enemies
+                - message (str): Result message
+                - enemies_killed (int): Number of enemies killed
         """
         result = {
             "success": False,
@@ -2506,71 +2506,71 @@ class Skills:
         wepon = await self._equip_highest_attack()
         enemy = self._get_nearest_hostile_entity(range)
         if not wepon:
-            self.bot.chat("武器になるものがインベントリにありません。敵から逃げます。")
+            self.bot.chat("No weapons in inventory. Escaping from enemy.")
             result["message"] = await self.avoid_enemies()
             result["error"] = "no_weapon"
             self.bot.chat(result["message"])
             print(result)
             return result
         while enemy:
-            # 敵との距離に応じた行動
+            # Actions depending on distance to enemy
             enemy_distance = self.bot.entity.position.distanceTo(enemy.position)
             
-            # クリーパーとファントム以外の敵が遠い場合は接近
+            # Move closer if enemies other than creepers & phantoms are far
             if enemy_distance >= 4 and enemy.name != 'creeper' and enemy.name != 'phantom':
                 try:
                     self.bot.pathfinder.setMovements(self.pathfinder.Movements(self.bot))
                     await self.bot.pathfinder.goto(self.pathfinder.goals.GoalFollow(enemy, 3.5), True)
                 except Exception:
-                    # エンティティが死んでいる場合などはエラーを無視
+                    # Ignore errors like if entity is already dead
                     pass
                     
-            # 敵が近すぎる場合は距離を取る
+            # Move away if enemy is too close
             if enemy_distance <= 2:
                 try:
                     self.bot.pathfinder.setMovements(self.pathfinder.Movements(self.bot))
                     inverted_goal = self.pathfinder.goals.GoalInvert(self.pathfinder.goals.GoalFollow(enemy, 2))
                     await self.bot.pathfinder.goto(inverted_goal, True)
                 except Exception:
-                    # エンティティが死んでいる場合などはエラーを無視
+                    # Ignore errors like if entity is already dead
                     pass
             
-            # 攻撃開始
+            # Begin attacking
             has_pvp = hasattr(self.bot, 'pvp') and self.bot.pvp is not None
             
             self.bot.pvp.attack(enemy)
                 
             attacked = True
             
-            # 少し待機
+            # Wait briefly
             await asyncio.sleep(0.5)
             
-            # 次の敵を探す
+            # Find next enemy
             previous_enemy = enemy
             enemy = self._get_nearest_hostile_entity(range)
             
-            # 前の敵がいなくなった場合はカウント
+            # Count if previous enemy is gone
             if enemy != previous_enemy and not self._is_entity_nearby(previous_enemy, range):
                 enemies_killed += 1
             
             if hasattr(self.bot, 'interrupt_code') and self.bot.interrupt_code:
                 if has_pvp:
                     self.bot.pvp.stop()
-                result["message"] = "防衛が中断されました"
+                result["message"] = "Defense interrupted"
                 self.bot.chat(result["message"])
                 print(result)
                 return result
         
-        # PVP攻撃を停止
+        # Stop PVP attack
         if hasattr(self.bot, 'pvp') and self.bot.pvp is not None:
             self.bot.pvp.stop()
         
         if attacked:
             result["success"] = True
-            result["message"] = f"自己防衛に成功しました。{enemies_killed}体の敵を倒しました。"
+            result["message"] = f"Successfully defended self. Killed {enemies_killed} enemies."
             result["enemies_killed"] = enemies_killed
         else:
-            result["message"] = "近くに敵対的なモブがいません。"
+            result["message"] = "No hostile mobs nearby."
         
         self.bot.chat(result["message"])
         print(result)
@@ -2578,33 +2578,33 @@ class Skills:
         
     async def pickup_nearby_items(self, item_name=None,distance=10):
         """
-        周囲のドロップアイテムを拾います。
+        Picks up surrounding dropped items.
         Args:
-            item_name (str, optional): 拾うアイテムの名前。Noneの場合は周囲のすべてのドロップアイテムを拾います。
-            distance (int, optional): ドロップアイテムを探す範囲。デフォルトは8
+            item_name (str, optional): Name of item to pick up. If None, picks up all surrounding dropped items.
+            distance (int, optional): Range to search for dropped items. Default 8
         Returns:
-            dict: 結果を含む辞書
-                - success (bool): アイテムを拾った場合はTrue
-                - message (str): 結果メッセージ
-                - picked_up (int): 拾ったアイテムの数
+            dict: Dictionary containing results
+                - success (bool): True if picked up items
+                - message (str): Result message
+                - picked_up (int): Number of items picked up
         """
         result = {
             "success": False,
             "message": ""
         }
         
-        # 最も近いアイテムを取得する関数
+        # Function to get nearest items
         def get_nearest_item():
             nearest_item_list = []
             
-            # bot.entities はエンティティの辞書やリストと仮定
+            # Assume bot.entities is a dictionary or list of entities
             for entity_id in self.bot.entities:
                 entity = self.bot.entities[entity_id]
                 if hasattr(entity, 'name') and entity.name == 'item':
                     drop_item_name = self._get_item_name(self._get_item_id_from_entity(entity))
                     if not item_name is None and item_name != drop_item_name:
                         continue
-                    # 距離計算
+                    # Calculate distance
                     dx = self.bot.entity.position.x - entity.position.x
                     dy = self.bot.entity.position.y - entity.position.y
                     dz = self.bot.entity.position.z - entity.position.z
@@ -2614,80 +2614,80 @@ class Skills:
                         nearest_item_list.append(entity)
             return nearest_item_list
 
-        # 最も近いアイテムを取得
+        # Get the closest items
         nearest_item_list = get_nearest_item()
         if nearest_item_list == []:
-            result["message"] = "周囲のドロップアイテムはありません。"
+            result["message"] = "No dropped items nearby."
             return result
         
         item_list = []
         for nearest_item in nearest_item_list:
-            # アイテムに近づく
+            # Approach the item
             block_pos = self.bot.blockAt(nearest_item.position)
             if block_pos:
                 move_result = await self.move_to_position(block_pos.position.x, block_pos.position.y, block_pos.position.z, 0.5)
                 if not move_result["success"]:
                     break
 
-            # アイテムIDを取得
+            # Get item ID
             item_id = self._get_item_id_from_entity(nearest_item)
             item_name = self._get_item_name(item_id)
             item_list.append(item_name)
-            # 少し待機してアイテムが拾われるのを待つ
+            # Wait slightly to allow for pickup
             await asyncio.sleep(0.2)
                 
         result["success"] = True
         item_str = ", ".join(item_list)
-        result["message"] = f"{item_str}を拾いました。"
+        result["message"] = f"Picked up {item_str}."
         self.bot.chat(result["message"])
         print(result)
         return result
         
     async def _break_block_at(self, x, y, z):
         """
-        指定された座標のブロックを破壊します。ツールは自動選択されます。
-        _break_block_atはダイヤモンドなどの'座標がわからない'特定のブロックを採掘するために用いないでください。(collect_block関数を用いてください)
+        Breaks the block at the specified coordinate. Tool is selected automatically.
+        _break_block_at should not be used to mine specific blocks like diamonds where 'coordinates are unknown'. (Use the collect_block function)
         
         Args:
-            x (float): 破壊するブロックのX座標
-            y (float): 破壊するブロックのY座標
-            z (float): 破壊するブロックのZ座標
+            x (float): X coordinate of block to break
+            y (float): Y coordinate of block to break
+            z (float): Z coordinate of block to break
             
         Returns:
-            dict: 結果を含む辞書
-                - success (bool): 破壊に成功した場合はTrue、失敗した場合はFalse
-                - message (str): 結果メッセージ
-                - position (dict): 破壊を試みた位置 {x, y, z}
-                - block_name (str, optional): 破壊したブロックの名前
-                - error (str, optional): エラーがある場合のエラーコード
+            dict: Dictionary containing results
+                - success (bool): True if break successful, False otherwise
+                - message (str): Result message
+                - position (dict): Attempted block position {x, y, z}
+                - block_name (str, optional): Name of the broken block
+                - error (str, optional): Error code if an error occurred
         
         Example:
             >>> await skills._break_block_at(100, -61, 100)
         """
-        self.bot.chat(f"{x}, {y}, {z}のブロックを破壊します。")
-        print(f"{x}, {y}, {z}のブロックを破壊します。")
+        self.bot.chat(f"Breaking block at {x}, {y}, {z}.")
+        print(f"Breaking block at {x}, {y}, {z}.")
         result = {
             "success": False,
             "message": "",
             "position": {"x": x, "y": y, "z": z}
         }
         
-        # 座標の検証
+        # Coordinate verification
         if x is None or y is None or z is None:
-            result["message"] = "破壊するブロックの座標が無効です"
+            result["message"] = "Invalid block coordinates"
             result["error"] = "invalid_coordinates"
             self.bot.chat(result["message"])
             print(result)
             return result
             
-        # Vec3オブジェクトを作成
+        # Create Vec3 object
         Vec3 = require('vec3')
         block_pos = Vec3(x, y, z)
         
-        # ブロックを取得
+        # Get block
         block = self.bot.blockAt(block_pos)
         if not block:
-            result["message"] = f"座標({x}, {y}, {z})にブロックが見つかりません"
+            result["message"] = f"No block found at coordinates ({x}, {y}, {z})"
             result["error"] = "no_block_found"
             self.bot.chat(result["message"])
             print(result)
@@ -2695,53 +2695,53 @@ class Skills:
             
         result["block_name"] = block.name
         
-        # 空気、水、溶岩の場合はスキップ
+        # Skip if air, water, or lava
         if block.name in ['air', 'water', 'lava']:
-            result["message"] = f"座標({x}, {y}, {z})は{block.name}なので破壊をスキップします"
+            result["message"] = f"Coordinates ({x}, {y}, {z}) point to {block.name}, bypassing block break"
             self.bot.chat(result["message"])
             print(result)
             return result
             
-        # ブロックまでの距離を確認
+        # Check distance to block
         move_result = await self.move_to_position(x, y, z, 4,canPlaceOn=False,allow1by1towers=False)
         if not move_result["success"]:
             return move_result
 
-        # クリエイティブモードでない場合は適切なツールを装備
+        # Equip appropriate tool if not in creative mode
         if self.bot.game.gameMode != 'creative':
             try:
-                # 適切なツールを装備
+                # Equip appropriate tool
                 self.bot.tool.equipForBlock(block)
                 
-                # 適切なツールを持っているか確認
+                # Check if holding appropriate tool
                 item_id = None
                 if self.bot.heldItem:
                     item_id = self.bot.heldItem.type
                             
-                # ブロックを採掘できるか確認
+                # Check if block can be harvested
                 if hasattr(block, 'canHarvest') and not block.canHarvest(item_id):
-                    result["message"] = f"{block.name}を採掘するための適切なツールを持っていません"
+                    result["message"] = f"No suitable tool to mine {block.name}"
                     result["error"] = "no_suitable_tool"
                     self.bot.chat(result["message"])
                     print(result)
                     return result
             except Exception as e:
-                result["message"] = f"ツール装備中にエラーが発生しました: {str(e)}"
+                result["message"] = f"Error occurred equipping tool: {str(e)}"
                 result["error"] = "tool_equip_error"
                 self.bot.chat(result["message"])
                 print(result)
                 return result
                 
-        # ブロックを破壊
+        # Break block
         try:
-            self.bot.dig(block, True)  # 第2引数をTrueにすることで採掘が完了するまで待機
-            result["message"] = f"{block.name}を座標({x:.1f}, {y:.1f}, {z:.1f})で破壊しました"
+            self.bot.dig(block, True)  # Set second argument to True to wait until mining completes
+            result["message"] = f"Broke {block.name} at coordinates ({x:.1f}, {y:.1f}, {z:.1f})"
             result["success"] = True
             self.bot.chat(result["message"])
             print(result)
             return result
         except Exception as e:
-            result["message"] = f"ブロック破壊中にエラーが発生しました: {str(e)}"
+            result["message"] = f"Error occurred breaking block: {str(e)}"
             result["error"] = "dig_error"
             self.bot.chat(result["message"])
             print(result)
@@ -2749,20 +2749,20 @@ class Skills:
         
     async def use_door(self, door_pos=None):
         """
-        指定された位置にあるドア・フェンスゲートを使用します。位置が指定されていない場合、最も近いドア・フェンスゲートを使用します。
-        なお、ドアにインタラクトしても開かないiron_door,iron_trapdoorは使用できません。
+        Uses the door or fence gate at the specified position. If position is not specified, uses the nearest door or fence gate.
+        Note: Cannot use iron_door or iron_trapdoor which do not open upon interaction.
         
         Args:
-            door_pos (Vec3, optional): 使用するドアの位置。Noneの場合は最も近いドアを使用します。
+            door_pos (Vec3, optional): Position of door to use. If None, uses nearest door.
             
         Returns:
-            dict: 結果を含む辞書
-                - success (bool): ドアの使用に成功した場合はTrue、失敗した場合はFalse
-                - message (str): 結果メッセージ
-                - door_position (dict, optional): 使用したドアの位置 {x, y, z}（成功時のみ）
+            dict: Dictionary containing results
+                - success (bool): True if successfully used door, False otherwise
+                - message (str): Result message
+                - door_position (dict, optional): Position of used door {x, y, z} (only on success)
         """
-        self.bot.chat(f"{door_pos}のドアを使用します。")
-        print(f"{door_pos}のドアを使用します。")
+        self.bot.chat(f"Using door at {door_pos}.")
+        print(f"Using door at {door_pos}.")
         result = {
             "success": False,
             "message": ""
@@ -2771,7 +2771,7 @@ class Skills:
         try:
             Vec3 = require('vec3')
             
-            # ドアの位置が指定されていない場合、最も近いドアを探す
+            # If door position not specified, find nearest door
             if not door_pos:
                 door_types = [
                     'oak_door', 'spruce_door', 'birch_door', 'jungle_door', 
@@ -2782,7 +2782,7 @@ class Skills:
                     'acacia_fence_gate', 'dark_oak_fence_gate', 'mangrove_fence_gate',
                     'crimson_fence_gate', 'warped_fence_gate'
                 ]
-                # トラップドアはハシゴ対応必要なため未実装
+                # Trapdoors not implemented as they require ladders
                 trapdoor_types = [
                     'oak_trapdoor', 'spruce_trapdoor', 'birch_trapdoor', 'jungle_trapdoor',
                     'acacia_trapdoor', 'dark_oak_trapdoor', 'mangrove_trapdoor'
@@ -2794,52 +2794,52 @@ class Skills:
                         door_pos = door_block.position
                         break
             else:
-                # 既存の座標をVec3オブジェクトに変換
+                # Convert existing coordinates to Vec3 object
                 door_pos = Vec3(door_pos.x, door_pos.y, door_pos.z)
                 
-            # ドアが見つからない場合
+            # If no door found
             if not door_pos:
-                result["message"] = "使用できるドアが見つかりませんでした。"
+                result["message"] = "Could not find a usable door."
                 self.bot.chat(result["message"])
                 print(result)
                 return result
                 
-            # 結果にドアの位置を記録
+            # Record door position in results
             result["door_position"] = {
                 "x": door_pos.x,
                 "y": door_pos.y,
                 "z": door_pos.z
             }
             
-            # ドアに近づく
+            # Move towards door
             await self.move_to_position(door_pos.x, door_pos.y, door_pos.z, 1,canDig=False)
                     
-            # ドアブロックを取得
+            # Get door block
             door_block = self.bot.blockAt(door_pos)
             
-            # ドアを見る
+            # Look at door
             self.bot.lookAt(door_pos)
             
-            # ドアが閉まっている場合は開ける
+            # Open door if it is closed
             if not door_block._properties.open:
                 self.bot.activateBlock(door_block)
                 
-            # 前進
+            # Move forward
             self.bot.setControlState("forward", True)
             await asyncio.sleep(0.6)
             self.bot.setControlState("forward", False)
             
-            # ドアを閉じる
+            # Close door
             self.bot.activateBlock(door_block)
             
             result["success"] = True
-            result["message"] = f"座標({door_pos.x}, {door_pos.y}, {door_pos.z})のドアを通過し、座標({self.bot.entity.position.x:.1f}, {self.bot.entity.position.y:.1f}, {self.bot.entity.position.z:.1f})に移動しました。"
+            result["message"] = f"Passed through door at ({door_pos.x}, {door_pos.y}, {door_pos.z}) and moved to ({self.bot.entity.position.x:.1f}, {self.bot.entity.position.y:.1f}, {self.bot.entity.position.z:.1f})."
             self.bot.chat(result["message"])
             print(result)
             return result
             
         except Exception as e:
-            result["message"] = f"ドアの使用中に予期せぬエラーが発生しました: {str(e)}"
+            result["message"] = f"Unexpected error occurred using door: {str(e)}"
             self.bot.chat(result["message"])
             print(result)
             import traceback
@@ -2848,25 +2848,25 @@ class Skills:
         
     async def till_and_sow(self, x, y, z, seed_type=None):
         """
-        指定された座標の地面を耕し、指定された種を植えます。
+        Tills ground at specified coordinates and plants specified seed.
         
         Args:
-            x (float): 耕す地点のX座標
-            y (float): 耕す地点のY座標
-            z (float): 耕す地点のZ座標
-            seed_type (str, optional): 植える種の種類。指定しない場合は耕すだけで種は植えません。
+            x (float): X coordinate to till
+            y (float): Y coordinate to till
+            z (float): Z coordinate to till
+            seed_type (str, optional): Type of seed to plant. If not specified, will only till but not plant seed.
             
         Returns:
-            dict: 結果を含む辞書
-                - success (bool): 地面を耕すことに成功した場合はTrue、失敗した場合はFalse
-                - message (str): 結果メッセージ
-                - position (dict): 耕した位置 {x, y, z}
-                - tilled (bool): 地面を耕したかどうか
-                - planted (bool, optional): 種を植えたかどうか（seed_typeが指定された場合）
-                - seed_type (str, optional): 植えた種の種類（seed_typeが指定された場合）
+            dict: Dictionary containing results
+                - success (bool): True if tilling ground is successful, False otherwise
+                - message (str): Result message
+                - position (dict): Tilled position {x, y, z}
+                - tilled (bool): Whether ground was tilled
+                - planted (bool, optional): Whether seed was planted (if seed_type is specified)
+                - seed_type (str, optional): Type of seed planted (if seed_type is specified)
         """
-        self.bot.chat(f"座標({x}, {y}, {z})の地面を耕し、{seed_type}を植えます。")
-        print(f"座標({x}, {y}, {z})の地面を耕し、{seed_type}を植えます。")
+        self.bot.chat(f"Tilling ground at ({x}, {y}, {z}) and planting {seed_type}.")
+        print(f"Tilling ground at ({x}, {y}, {z}) and planting {seed_type}.")
         result = {
             "success": False,
             "message": "",
@@ -2877,45 +2877,45 @@ class Skills:
         try:
             Vec3 = require('vec3')
             
-            # 座標を整数に丸める
+            # Round coordinates to integers
             x = round(x)
             y = round(y)
             z = round(z)
             result["position"] = {"x": x, "y": y, "z": z}
             
-            # 対象のブロックを取得
+            # Get target block
             block = self.bot.blockAt(Vec3(x, y, z))
             
-            # 対象のブロックが耕せるかチェック
+            # Check if target block can be tilled
             if block.name not in ['grass_block', 'dirt', 'farmland']:
-                result["message"] = f"{block.name}は耕せません。土または草ブロックである必要があります。"
+                result["message"] = f"Cannot till {block.name}. Must be dirt or grass block."
                 self.bot.chat(result["message"])
                 print(result)
                 return result
                 
-            # 上のブロックがあるかチェック
+            # Check if block above exists
             above = self.bot.blockAt(Vec3(x, y+1, z))
             if above.name != 'air':
-                result["message"] = f"ブロックの上に{above.name}があるため耕せません。"
+                result["message"] = f"Cannot till because {above.name} is on top of block."
                 self.bot.chat(result["message"])
                 print(result)
                 return result
             
-            # クワを探して装備
+            # Find hoe and equip
             hoe = None
             for item in self.bot.inventory.items():
                 if 'hoe' in item.name:
                     hoe = item
                     break
             if not hoe:
-                result["message"] = "クワを持っていないため耕せません。"
+                result["message"] = "Cannot till because no hoe is held."
                 self.bot.chat(result["message"])
                 print(result)
                 return result
             else:
                 self.bot.equip(hoe, 'hand')
                     
-            # ブロックまでの距離が遠い場合は近づく
+            # Move closer if block is too far
             if self.bot.entity.position.distanceTo(block.position) > 4.5:
                 pos = block.position
                 move_result = await self.move_to_position(pos.x, pos.y, pos.z, 4)
@@ -2925,69 +2925,69 @@ class Skills:
                     print(result)
                     return result
             
-            # 既に農地でない場合は耕す
+            # Till if not already farmland
             if block.name != 'farmland':
                 
-                # ブロックを耕す
+                # Till the block
                 self.bot.activateBlock(block)
                 
                 result["tilled"] = True
-                self.bot.chat(f"BOTは、座標({x}, {y}, {z})を耕しました。")
+                self.bot.chat(f"BOT tilled ({x}, {y}, {z}).")
                 print(result)
             else:
                 result["tilled"] = True
                 
-            # 種を植える
+            # Plant seed
             if seed_type:
-                # 「seed」で終わるが「seeds」で終わらない場合、「s」を追加
+                # If ends with 'seed' but not 'seeds', add 's'
                 if seed_type.endswith('seed') and not seed_type.endswith('seeds'):
-                    seed_type += 's'  # 一般的な間違いを修正
+                    seed_type += 's'  # Fix common mistake
                     
-                # 種を探す
+                # Find seeds
                 seeds = None
                 for item in self.bot.inventory.items():
                     if item.name == seed_type:
                         seeds = item
                         break
                 if not seeds:
-                    result["message"] = f"{seed_type}を持っていないため植えられません。" + \
-                                       (f"座標({x}, {y}, {z})は耕しました。" if result["tilled"] else "")
+                    result["message"] = f"Cannot plant because no {seed_type} is held." + \
+                                       (f" Tilled ({x}, {y}, {z})." if result["tilled"] else "")
                     self.bot.chat(result["message"])
                     print(result)
                     
-                    # 耕せたならある程度は成功
+                    # Considered somewhat successful if tilled
                     if result["tilled"]:
                         result["success"] = True
                     return result
                 
-                # 種を装備
+                # Equip seeds
                 self.bot.equip(seeds, 'hand')
                 
-                # 種を植える（農地の上に設置）
-                # 底面に対して設置するので、Vec3(0, -1, 0)を使用
+                # Plant the seeds (place on farmland)
+                # Use Vec3(0, -1, 0) as we are placing it on the top surface of the block below
                 self.bot.placeBlock(block, Vec3(0, -1, 0))
                 
                 result["planted"] = True
                 result["seed_type"] = seed_type
-                self.bot.chat(f"座標({x}, {y}, {z})に{seed_type}を植えました。")
-                print(f"座標({x}, {y}, {z})に{seed_type}を植えました。")
+                self.bot.chat(f"Planted {seed_type} at ({x}, {y}, {z}).")
+                print(f"Planted {seed_type} at ({x}, {y}, {z}).")
             
             result["success"] = True
             
             if seed_type and result["planted"]:
-                result["message"] = f"座標({x}, {y}, {z})を耕し、{seed_type}を植えました。"
+                result["message"] = f"Tilled ({x}, {y}, {z}) and planted {seed_type}."
             else:
-                result["message"] = f"座標({x}, {y}, {z})を耕しました。"
+                result["message"] = f"Tilled ({x}, {y}, {z})."
             print(result)
             self.bot.chat(result["message"])
             return result
             
         except Exception as e:
             already_tilled = "tilled" in result and result["tilled"]
-            result["message"] = f"耕し・種まき中に予期せぬエラーが発生しました: {str(e)}" + \
-                               (f"座標({x}, {y}, {z})は耕すことができました。" if already_tilled else "")
+            result["message"] = f"Unexpected error occurred during tilling/planting: {str(e)}" + \
+                               (f" Successfully tilled ({x}, {y}, {z})." if already_tilled else "")
             
-            # 耕すだけはできた場合は部分的に成功
+            # Partially successful if just tilling worked
             if already_tilled:
                 result["success"] = True
                 
@@ -2999,19 +2999,19 @@ class Skills:
 
     def get_item_crafting_recipes(self, item_name):
         """
-        アイテムのクラフトレシピを取得します
+        Retrieves crafting recipes for an item
         
         Args:
-            item_name (str): アイテム名
+            item_name (str): Item name
             
         Returns:
-            list: レシピのリスト。各レシピは[材料辞書, 結果辞書]の形式
+            list: List of recipes. Each recipe is in the format [ingredients dict, result dict]
 
         Example:
             >>> recipes = get_item_crafting_recipes("crafting_table")
             [[{'oak_planks': 4}, {'craftedCount': 1}], [{'spruce_planks': 4}, {'craftedCount': 1}]...]
         """
-        self.bot.chat(f"{item_name}のクラフトレシピを取得します。")
+        self.bot.chat(f"Retrieving recipes for {item_name}.")
         item_id = self.mcdata.itemsByName[item_name].id
         if item_id not in self.mcdata.recipes:
             return None
@@ -3042,18 +3042,18 @@ class Skills:
 
     async def collect_liquid(self, liquid_type='water', max_distance=16):
         """
-        指定された範囲内の水または溶岩をバケツで汲み上げます。このメソッドの実行にはbucketが必要です。
+        Collects water or lava within range with a bucket. Requires a bucket in inventory.
 
         Args:
-            liquid_type (str): 汲み上げる液体の種類。'water'または'lava'を指定。デフォルトは'water'。
-            max_distance (int): 探索する最大距離。デフォルトは16。
+            liquid_type (str): Type of liquid to collect. Either 'water' or 'lava'. Default 'water'.
+            max_distance (int): Maximum search distance. Default 16.
             
         Returns:
-            dict: 結果を含む辞書
-                - success (bool): 液体を汲み上げることに成功した場合はTrue、失敗した場合はFalse
-                - message (str): 結果メッセージ
-                - position (dict, optional): 汲み上げた液体の位置 {x, y, z}
-                - liquid_type (str): 汲み上げた液体の種類
+            dict: Dictionary containing results
+                - success (bool): True if liquid collection successful, False otherwise
+                - message (str): Result message
+                - position (dict, optional): Position of collected liquid {x, y, z}
+                - liquid_type (str): Type of liquid collected
         """
         result = {
             "success": False,
@@ -3062,14 +3062,14 @@ class Skills:
         }
         
         try:
-            # 液体の種類を確認
+            # Check liquid type
             if liquid_type not in ['water', 'lava']:
-                result["message"] = f"無効な液体タイプです: {liquid_type}。'water'または'lava'を指定してください。"
+                result["message"] = f"Invalid liquid type: {liquid_type}. Specify 'water' or 'lava'."
                 self.bot.chat(result["message"])
                 print(result)
                 return result
             
-            # バケツを探す
+            # Find bucket
             bucket = None
             bucket_count = 0
             for item in self.bot.inventory.items():
@@ -3080,12 +3080,12 @@ class Skills:
             bucket_count += 1
             
             if not bucket:
-                result["message"] = "バケツを持っていないため液体を汲み上げられません。"
+                result["message"] = "Cannot collect liquid because no empty bucket is held."
                 self.bot.chat(result["message"])
                 print(result)
                 return result
             
-            # 指定された液体ブロックを探す
+            # Find specified liquid block
             block_id = self.mcdata.blocksByName[liquid_type].id
             blocks = self.bot.findBlocks({
                 'matching': block_id,
@@ -3100,12 +3100,12 @@ class Skills:
                     break
             
             if not liquid_block:
-                result["message"] = f"範囲内に{liquid_type}が見つかりませんでした。"
+                result["message"] = f"{liquid_type} not found within range."
                 self.bot.chat(result["message"])
                 print(result)
                 return result
             
-            # ブロックまでの距離が遠い場合は近づく
+            # Move closer if block is too far
             if self.bot.entity.position.distanceTo(liquid_block.position) > 2:
                 pos = liquid_block.position
                 move_result = await self.move_to_position(pos.x, pos.y, pos.z, 2)
@@ -3115,23 +3115,23 @@ class Skills:
                     print(result)
                     return result
             
-            # バケツを装備
+            # Equip bucket
             self.bot.equip(bucket, 'hand')
 
-            # botが液体ブロックを見る
+            # bot looks at liquid block
             self.bot.lookAt(liquid_block.position)
             
-            # バケツを使って液体を汲み上げる
+            # Use bucket to collect liquid
             self.bot.activateBlock(liquid_block)
             self.bot.activateItem()
             
-            # 少し待機して操作が完了するのを待つ
+            # Wait slightly for operation to finish
             await asyncio.sleep(1)
 
-            # バケツを非アクティブ化
+            # Deactivate bucket
             self.bot.deactivateItem()
 
-            # 結果を設定
+            # Set results
             result["success"] = True
             result["position"] = {
                 "x": liquid_block.position.x,
@@ -3139,7 +3139,7 @@ class Skills:
                 "z": liquid_block.position.z
             }
             
-            # 正しい液体を汲み上げたかチェック（インベントリを確認）
+            # Verify if correct liquid was collected (check inventory)
             has_filled_bucket = False
             
             for item in self.bot.inventory.items():
@@ -3151,17 +3151,17 @@ class Skills:
                         break
             
             if has_filled_bucket:
-                result["message"] = f"座標({liquid_block.position.x}, {liquid_block.position.y}, {liquid_block.position.z})の{liquid_type}を{bucket.name}で汲み上げました。"
+                result["message"] = f"Collected {liquid_type} at ({liquid_block.position.x}, {liquid_block.position.y}, {liquid_block.position.z}) with {bucket.name}."
             else:
                 result["success"] = False
-                result["message"] = f"{liquid_type}の汲み上げに失敗しました。"
+                result["message"] = f"Failed to collect {liquid_type}."
             
             self.bot.chat(result["message"])
             print(result)
             return result
             
         except Exception as e:
-            result["message"] = f"液体の汲み上げ中に予期せぬエラーが発生しました: {str(e)}"
+            result["message"] = f"Unexpected error occurred collecting liquid: {str(e)}"
             self.bot.chat(result["message"])
             print(result)
             import traceback
@@ -3170,23 +3170,23 @@ class Skills:
 
     async def place_liquid(self, x, y, z, liquid_type='water'):
         """
-        指定された座標に液体（水または溶岩）をバケツから配置します。このメソッドの実行にはater_bucketまたはlava_bucketが必要です。
+        Places liquid (water or lava) from bucket at specified coordinates. Requires water_bucket or lava_bucket in inventory.
         
         Args:
-            x (float): 液体を配置するX座標
-            y (float): 液体を配置するY座標
-            z (float): 液体を配置するZ座標
-            liquid_type (str): 配置する液体の種類。'water'または'lava'を指定。デフォルトは'water'。
+            x (float): X coordinate to place liquid
+            y (float): Y coordinate to place liquid
+            z (float): Z coordinate to place liquid
+            liquid_type (str): Type of liquid to place. Either 'water' or 'lava'. Default 'water'.
             
         Returns:
-            dict: 結果を含む辞書
-                - success (bool): 液体の配置に成功した場合はTrue、失敗した場合はFalse
-                - message (str): 結果メッセージ
-                - position (dict): 液体を配置した位置 {x, y, z}
-                - liquid_type (str): 配置した液体の種類
+            dict: Dictionary containing results
+                - success (bool): True if liquid placement successful, False otherwise
+                - message (str): Result message
+                - position (dict): Placed position {x, y, z}
+                - liquid_type (str): Type of liquid placed
         """
-        self.bot.chat(f"{liquid_type}を座標({x}, {y}, {z})に配置します。")
-        print(f"{liquid_type}を座標({x}, {y}, {z})に配置します。")
+        self.bot.chat(f"Placing {liquid_type} at ({x}, {y}, {z}).")
+        print(f"Placing {liquid_type} at ({x}, {y}, {z}).")
         result = {
             "success": False,
             "message": "",
@@ -3195,20 +3195,20 @@ class Skills:
         }
         
         try:
-            # 液体の種類を確認
+            # Check liquid type
             if liquid_type not in ['water', 'lava']:
-                result["message"] = f"無効な液体タイプです: {liquid_type}。'water'または'lava'を指定してください。"
+                result["message"] = f"Invalid liquid type: {liquid_type}. Specify 'water' or 'lava'."
                 self.bot.chat(result["message"])
                 print(result)
                 return result
             
-            # 座標を整数に丸める
+            # Round coordinates to integers
             x = round(x)
             y = round(y)
             z = round(z)
             result["position"] = {"x": x, "y": y, "z": z}
             
-            # 液体入りバケツを探す
+            # Find filled bucket
             filled_bucket = None
             
             for item in self.bot.inventory.items():
@@ -3216,24 +3216,24 @@ class Skills:
                     filled_bucket = item
             
             if not filled_bucket:
-                result["message"] = f"{liquid_type}_bucketを持っていないため液体を配置できません。"
+                result["message"] = f"Cannot place liquid because no {liquid_type}_bucket is held."
                 self.bot.chat(result["message"])
                 print(result)
                 return result
             
-            # 対象のブロックを取得
+            # Get target block
             Vec3 = require('vec3')
             target_position = Vec3(x, y, z)
             target_block = self.bot.blockAt(target_position)
             
-            # 配置先が空気または他の配置可能なブロックかを確認
+            # Check if target is air or another placeable block
             if target_block.name != 'air' and target_block.name != 'cave_air':
-                result["message"] = f"座標({x}, {y}, {z})には既に{target_block.name}があるため液体を配置できません。"
+                result["message"] = f"Cannot place liquid because {target_block.name} is already at ({x}, {y}, {z})."
                 self.bot.chat(result["message"])
                 print(result)
                 return result
             
-            # ブロックまでの距離が遠い場合は近づく
+            # Move closer if block is too far
             if self.bot.entity.position.distanceTo(target_position) > 2:
                 move_result = await self.move_to_position(x, y, z, 2)
                 if not move_result["success"]:
@@ -3242,39 +3242,39 @@ class Skills:
                     print(result)
                     return result
             
-            # 液体入りバケツを装備
+            # Equip filled bucket
             self.bot.equip(filled_bucket, 'hand')
             
-            # 対象ブロックを見る
+            # Look at target block
             self.bot.lookAt(target_position)
             
-            # バケツを使って液体を配置
+            # Use bucket to place liquid
             self.bot.activateBlock(target_block)
             self.bot.activateItem()
             
-            # 少し待機して操作が完了するのを待つ
+            # Wait slightly for operation to finish
             await asyncio.sleep(1)
             
-            # バケツを非アクティブ化
+            # Deactivate bucket
             self.bot.deactivateItem()
             
-            # 配置されたブロックを確認
+            # Verify placed block
             new_block = self.bot.blockAt(target_position)
             is_correct_liquid = new_block and new_block.name == liquid_type
             
             if is_correct_liquid:
                 result["success"] = True
-                result["message"] = f"座標({x}, {y}, {z})に{liquid_type}を{filled_bucket.name}から配置しました。"
+                result["message"] = f"Placed {liquid_type} from {filled_bucket.name} at ({x}, {y}, {z})."
             else:
                 result["success"] = False
-                result["message"] = f"座標({x}, {y}, {z})への{liquid_type}の配置に失敗しました。"
+                result["message"] = f"Failed to place {liquid_type} at ({x}, {y}, {z})."
             
             self.bot.chat(result["message"])
             print(result)
             return result
             
         except Exception as e:
-            result["message"] = f"液体の配置中に予期せぬエラーが発生しました: {str(e)}"
+            result["message"] = f"Unexpected error occurred placing liquid: {str(e)}"
             self.bot.chat(result["message"])
             print(result)
             import traceback
@@ -3283,16 +3283,16 @@ class Skills:
 
     def _make_item(self, item_name, count=1):
         """
-        指定された名前とカウントでアイテムオブジェクトを作成します。
-        クリエイティブモードでのアイテム追加に使用します。
-        注意:クリエイティブモードのみで動作します
+        Creates an item object with the specified name and count.
+        Used for adding items in creative mode.
+        Note: Only works in creative mode
         
         Args:
-            item_name (str): アイテム名
-            count (int): アイテム数
+            item_name (str): Item name
+            count (int): Item count
             
         Returns:
-            Object: アイテムオブジェクト
+            Object: Item object
         """
         try:
             if hasattr(self.mcdata, 'makeItem'):
@@ -3305,9 +3305,9 @@ class Skills:
                     'metadata': 0
                 }
         except Exception as e:
-            print(f"アイテム作成エラー: {e}")
+            print(f"Error creating item: {e}")
             
-        # 基本的なオブジェクトを返す
+        # Return a basic object
         return {
             'name': item_name,
             'count': count
@@ -3316,45 +3316,45 @@ class Skills:
             
     async def _equip_highest_attack(self):
         """
-        最も攻撃力の高い武器を装備します。
+        Equips the weapon with the highest attack power.
         
         Returns:
-            bool: 武器を装備した場合はTrue、適切な武器がない場合はFalse
+            bool: True if equipped weapon, False if no suitable weapon
         """
-        # 剣と斧を探す（ただしツルハシは除く）
+        # Find swords and axes (excluding pickaxes)
         weapons = []
         for item in self.bot.inventory.items():
             if 'sword' in item.name or ('axe' in item.name and 'pickaxe' not in item.name):
                 weapons.append(item)
                 
-        # 武器がない場合はツルハシやシャベルを探す
+        # If no weapons, find pickaxes or shovels
         if not weapons:
             for item in self.bot.inventory.items():
                 if 'pickaxe' in item.name or 'shovel' in item.name:
                     weapons.append(item)
                     
-        # 武器がない場合は終了
+        # Return if no weapons
         if not weapons:
             return False
             
-        # 攻撃力でソート
+        # Sort by attack damage
         try:
-            # attackDamageプロパティが利用できる場合
+            # If attackDamage property is available
             weapons.sort(key=lambda item: getattr(item, 'attackDamage', 0), reverse=True)
         except:
-            # 攻撃力の情報がない場合は材質と種類でソート
+            # If attackDamage info not available, sort by material and type
             material_order = ['netherite', 'diamond', 'iron', 'stone', 'golden', 'wooden']
             weapon_type_order = ['sword', 'axe', 'pickaxe', 'shovel']
             
             def get_attack_score(item):
-                # 材質スコア
+                # Material score
                 material_score = 0
                 for i, material in enumerate(material_order):
                     if material in item.name:
                         material_score = len(material_order) - i
                         break
                 
-                # 武器タイプスコア
+                # Weapon type score
                 type_score = 0
                 for i, weapon_type in enumerate(weapon_type_order):
                     if weapon_type in item.name:
@@ -3365,21 +3365,21 @@ class Skills:
                 
             weapons.sort(key=get_attack_score, reverse=True)
             
-        # 最高の武器を装備
+        # Equip best weapon
         best_weapon = weapons[0]
         self.bot.equip(best_weapon, 'hand')
         return True
         
     def _get_nearby_entity_of_type(self, entity_type, max_distance=24):
         """
-        指定された種類の最も近いエンティティを取得します。
+        Gets the nearest entity of the specified type.
         
         Args:
-            entity_type (str): エンティティの種類
-            max_distance (int): 検索する最大距離
+            entity_type (str): Type of entity
+            max_distance (int): Maximum search distance
             
         Returns:
-            Entity: 最も近いエンティティ、見つからない場合はNone
+            Entity: Nearest entity, None if not found
         """
         try:
             entities = self._get_nearby_entities(max_distance)
@@ -3387,27 +3387,27 @@ class Skills:
                 if hasattr(entity, 'name') and entity.name == entity_type:
                     return entity
         except Exception as e:
-            print(f"エンティティ検索エラー: {e}")
+            print(f"Error searching entity: {e}")
             
         return None
         
     def _get_nearest_hostile_entity(self, max_distance=24):
         """
-        指定した距離以内で最も近い敵対的なエンティティを取得します。
+        Gets the nearest hostile entity within specified distance.
         
         Args:
-            max_distance (int): 検索する最大距離。デフォルトは24
+            max_distance (int): Maximum search distance. Default 24
             
         Returns:
-            Entity or None: 最も近い敵対的なエンティティ。見つからない場合はNone
+            Entity or None: Nearest hostile entity. None if not found
         """
         def calculate_distance(pos1, pos2):
-            """2点間のユークリッド距離を計算"""
+            """Calculates Euclidean distance between 2 points"""
             return ((pos1.x - pos2.x) ** 2 + 
                    (pos1.y - pos2.y) ** 2 + 
                    (pos1.z - pos2.z) ** 2) ** 0.5
 
-        # 敵対的なエンティティをフィルタリング
+        # Filter hostile entities
         hostile_entities = [
             entity for entity in self._get_nearby_entities(max_distance)
             if self._is_hostile(entity)
@@ -3416,7 +3416,7 @@ class Skills:
         if not hostile_entities:
             return None
             
-        # 距離でソート
+        # Sort by distance
         hostile_entities.sort(
             key=lambda e: calculate_distance(self.bot.entity.position, e.position)
         )
@@ -3425,31 +3425,31 @@ class Skills:
         
     def _get_nearby_entities(self, max_distance=24):
         """
-        指定した距離以内にある全てのエンティティを取得し、距離順にソートして返します。
+        Gets all entities within specified distance, sorted by distance.
         
         Args:
-            max_distance (int): 検索する最大距離。デフォルトは24
+            max_distance (int): Maximum search distance. Default 24
             
         Returns:
-            list: 距離順にソートされた近くのエンティティのリスト
+            list: List of nearby entities sorted by distance
         """
         if not self.bot or not self.bot.entity or not hasattr(self.bot.entity, 'position'):
             return []
             
         def calculate_distance(pos1, pos2):
-            """2点間のユークリッド距離を計算"""
+            """Calculates Euclidean distance between 2 points"""
             return ((pos1.x - pos2.x) ** 2 + 
                    (pos1.y - pos2.y) ** 2 + 
                    (pos1.z - pos2.z) ** 2) ** 0.5
             
         nearby_entities = []
-        # JavaScriptのオブジェクトとして実装されているentitiesをキーで反復処理
+        # Iterate over entities which are implemented as a Javascript object
         for entity_id in self.bot.entities:
             entity = self.bot.entities[entity_id]
-            if not entity or not hasattr(entity, 'id'):  # エンティティがNoneの場合はスキップ
+            if not entity or not hasattr(entity, 'id'):  # Skip if entity is None
                 continue
                 
-            if entity.id == self.bot.entity.id:  # 自分自身は除外
+            if entity.id == self.bot.entity.id:  # Exclude self
                 continue
                 
             if hasattr(entity, 'position') and entity.position:
@@ -3457,7 +3457,7 @@ class Skills:
                 if distance <= max_distance:
                     nearby_entities.append(entity)
                 
-        # 距離でソート
+        # Sort by distance
         nearby_entities.sort(
             key=lambda e: calculate_distance(self.bot.entity.position, e.position)
         )
@@ -3466,16 +3466,16 @@ class Skills:
         
     def _is_entity_nearby(self, entity, max_distance=24):
         """
-        特定のエンティティが近くにいるか確認します。
+        Checks if a specific entity is nearby.
         
         Args:
-            entity: 確認するエンティティ
-            max_distance (int): 検索する最大距離
+            entity: Entity to check
+            max_distance (int): Maximum search distance
             
         Returns:
-            bool: エンティティが近くにいる場合はTrue
+            bool: True if entity is nearby
         """
-        # エンティティが有効かチェック
+        # Check if entity is valid
         if not entity or not hasattr(entity, 'id'):
             return False
             
@@ -3487,13 +3487,13 @@ class Skills:
     
     def _is_hostile(self, entity):
         """
-        エンティティが敵対的かどうかを判断します。
+        Determines if an entity is hostile.
         
         Args:
-            entity: 判断するエンティティ
+            entity: Entity to evaluate
             
         Returns:
-            bool: 敵対的な場合はTrue
+            bool: True if hostile
         """
         hostile_mobs = [
             'zombie', 'skeleton', 'creeper', 'spider', 'enderman', 
@@ -3511,27 +3511,27 @@ class Skills:
         
     def _is_smeltable(self, item_name):
         """
-        アイテムが精錬可能かどうかを判断します。
+        Determines if an item is smeltable.
         
         Args:
-            item_name (str): 判断するアイテム名
+            item_name (str): Item name to evaluate
             
         Returns:
-            bool: 精錬可能な場合はTrue
+            bool: True if smeltable
         """
-        # 精錬可能なアイテムのリスト
+        # List of smeltable items
         smeltable_items = [
-            # 鉱石
+            # Ores
             'raw_iron', 'raw_gold', 'raw_copper', 
             'iron_ore', 'gold_ore', 'copper_ore',
             'ancient_debris', 'netherite_scrap',
-            # 食材
+            # Food
             'beef', 'chicken', 'cod', 'salmon', 'porkchop', 'potato', 'rabbit', 'mutton',
-            # その他
+            # Other
             'sand', 'cobblestone', 'clay', 'clay_ball', 'cactus'
         ]
         
-        # 「raw_」で始まるアイテムは基本的に精錬可能と判断
+        # Assume items starting with 'raw_' are smeltable
         if item_name.startswith('raw_'):
             return True
             
@@ -3539,12 +3539,12 @@ class Skills:
         
     def _get_smelting_fuel(self):
         """
-        インベントリから精錬に使用できる燃料を探します。
+        Searches inventory for fuel to use in smelting.
         
         Returns:
-            Object: 燃料アイテムオブジェクト、見つからない場合はNone
+            Object: Fuel item object, None if not found
         """
-        # 燃料として使用できるアイテムを優先順に探す
+        # Search for items usable as fuel in order of priority
         fuel_types = ['coal', 'charcoal', 'coal_block', 'lava_bucket', 'blaze_rod', 'oak_planks', 'spruce_planks', 
                      'birch_planks', 'jungle_planks', 'acacia_planks', 'dark_oak_planks', 
                      'oak_log', 'spruce_log', 'birch_log', 'jungle_log', 'acacia_log', 'dark_oak_log']
@@ -3558,13 +3558,13 @@ class Skills:
         
     def _get_item_name(self, item_id):
         """
-        アイテムIDから対応するアイテム名を取得します。
+        Gets item name corresponding to item ID.
         
         Args:
-            item_id (int): アイテムのID
+            item_id (int): Item ID
             
         Returns:
-            str: アイテム名。IDが見つからない場合はNone
+            str: Item name. None if ID not found
         """
         item = self.mcdata.items[item_id]
         
@@ -3574,13 +3574,13 @@ class Skills:
         
     def _get_item_id(self, item_name):
         """
-        アイテム名からアイテムIDを取得します。
+        Gets item ID from item name.
         
         Args:
-            item_name (str): アイテム名
+            item_name (str): Item name
             
         Returns:
-            int: アイテムID
+            int: Item ID
         """
         try:
             if hasattr(self.mcdata, 'itemsByName') and item_name in self.mcdata.itemsByName:
@@ -3590,69 +3590,69 @@ class Skills:
         except:
             pass
             
-        # アイテムが見つからない場合はエラー
+        # Return None if item not found
         return None
     
     def _get_item_id_from_entity(self, entity):
         """
-        エンティティからアイテムIDを取得します。
+        Gets item ID from an entity.
         
         Args:
-            entity: エンティティオブジェクト
+            entity: Entity object
             
         Returns:
-            int: アイテムID
+            int: Item ID
         """
-        # metadata の8番目の要素（インデックス7）にitemIdが含まれている
+        # itemId is in the 8th element (index 7) of metadata
         if entity and hasattr(entity, 'metadata'):
             metadata_item = entity.metadata[8]
             return metadata_item.itemId
         
-        # 取得できない場合はNoneを返す
+        # Return None if cannot be retrieved
         return None
 
     async def handle_connection_error(self, timeout=30):
         """
-        API通信上の問題が発生した場合に、ボットの再接続を試みます。
-        APIが応答しない、タイムアウトする場合に使用します。
+        Attempts to reconnect the bot if there's an API communication issue.
+        Used when the API doesn't respond or times out.
 
         Args:
-            timeout (int): 再接続試行のタイムアウト時間（秒）。デフォルトは30秒。
+            timeout (int): Reconnect attempt timeout (seconds). Default 30s.
 
         Returns:
-            dict: 再接続の結果
-                - success (bool): 再接続に成功した場合はTrue
-                - message (str): 結果メッセージ
+            dict: Reconnection results
+                - success (bool): True if reconnection was successful
+                - message (str): Result message
         """
-        self.bot.chat("通信エラーが発生したため、サーバーへの再接続を試みます...")
+        self.bot.chat("Attempting to reconnect to server due to communication error...")
         result = {
             "success": False,
             "message": ""
         }
         try:
-            # discovery インスタンスの reconnect_bot メソッドを呼び出す
-            # reconnect_bot は bool を返すように変更されているはず
+            # Call reconnect_bot method of discovery instance
+            # reconnect_bot should be changed to return a bool
             reconnect_success = await self.discovery.reconnect_bot(timeout=timeout)
 
             if reconnect_success:
                 result["success"] = True
-                result["message"] = "サーバーへの再接続に成功しました。"
+                result["message"] = "Successfully reconnected to server."
                 self.bot.chat(result["message"])
-                # 再接続後、Skillsクラス内の参照を更新する必要があるかもしれない
+                # After reconnecting, might need to update references inside Skills class
                 self.bot = self.discovery.bot
                 self.mcdata = self.discovery.mcdata
                 self.pathfinder = self.discovery.pathfinder
                 self.movements = self.discovery.movements
                 self.mineflayer = self.discovery.mineflayer
-                print("Skillsクラス内の参照を更新しました。")
+                print("Updated references in Skills class.")
             else:
-                result["message"] = f"サーバーへの再接続に失敗しました（タイムアウト: {timeout}秒）。サーバーの状態を確認してください。"
-                # botインスタンスがNoneになっている可能性があるのでチャットは避ける
+                result["message"] = f"Failed to reconnect to server (timeout: {timeout} seconds). Please check server status."
+                # Avoid chat since bot instance might be None
                 print(result["message"])
 
         except Exception as e:
-            result["message"] = f"再接続処理中に予期せぬエラーが発生しました: {str(e)}"
-            print(f"再接続エラー: {result['message']}")
+            result["message"] = f"Unexpected error occurred during reconnection: {str(e)}"
+            print(f"Reconnection error: {result['message']}")
             import traceback
             traceback.print_exc()
 
@@ -3660,45 +3660,45 @@ class Skills:
 
     async def create_nether_portal(self, check_space_only=False):
         """
-        黒曜石を使ってネザーゲートを設置し、火打石と打ち金で起動します。
-        最小構成（10個の黒曜石、角なし）で設置します。
+        Places a Nether portal using obsidian and activates it with flint and steel.
+        Places it with a minimum layout (10 obsidian blocks, no corners).
 
         Args:
-            check_space_only (bool): Trueの場合、設置可能なスペースがあるかだけを確認し、実際には設置しない。
+            check_space_only (bool): If True, only checks if there is space to place it, without actually placing it.
 
         Returns:
-            dict: 結果を含む辞書
-                - success (bool): ゲートの設置と起動に成功した場合はTrue
-                - message (str): 結果メッセージ
-                - portal_base_pos (dict, optional): 設置したゲートの基準座標 {x, y, z}
-                - error (str, optional): エラーコード (insufficient_materials, no_space, placement_failed, activation_failed, verification_failed)
+            dict: Dictionary containing results
+                - success (bool): True if portal placement and activation successful
+                - message (str): Result message
+                - portal_base_pos (dict, optional): Base coordinates of the placed portal {x, y, z}
+                - error (str, optional): Error code (insufficient_materials, no_space, placement_failed, activation_failed, verification_failed)
         """
-        self.bot.chat("ネザーゲートの作成を開始します。")
+        self.bot.chat("Starting to create Nether portal.")
         result = {
             "success": False,
             "message": "",
         }
         Vec3 = require('vec3')
 
-        # --- 1. 材料チェック ---
+        # --- 1. Check materials ---
         inventory = await self.get_inventory_counts()
         obsidian_count = inventory.get('obsidian', 0)
         flint_and_steel_count = inventory.get('flint_and_steel', 0)
 
         if obsidian_count < 10:
-            result["message"] = f"ネザーゲートの作成に必要な黒曜石が足りません (必要: 10, 所持: {obsidian_count})"
+            result["message"] = f"Not enough obsidian to create Nether portal (Need: 10, Have: {obsidian_count})"
             result["error"] = "insufficient_materials"
             self.bot.chat(result["message"])
             print(result)
             return result
         if flint_and_steel_count < 1 and not check_space_only:
-            result["message"] = "ネザーゲートの起動に必要な火打石と打ち金がありません"
+            result["message"] = "Missing flint and steel needed to activate the Nether portal"
             result["error"] = "insufficient_materials"
             self.bot.chat(result["message"])
             print(result)
             return result
 
-        # --- 2. スペース検索 (高さ5, 幅4, 深さ1) ---
+        # --- 2. Space search (height 5, width 4, depth 1) ---
         portal_width = 4
         portal_height = 5
         search_distance = 15
@@ -3708,7 +3708,7 @@ class Skills:
         base_pos = await self.get_nearest_free_space(portal_width, portal_height,1, search_distance)
 
         if not base_pos:
-            result["message"] = f"ネザーゲートを設置するための十分なスペース (高さ{portal_height}, 幅{portal_width}) が見つかりませんでした。"
+            result["message"] = f"Could not find enough space (Height: {portal_height}, Width: {portal_width}) to place the Nether portal."
             result["error"] = "no_space"
             self.bot.chat(result["message"])
             print(result)
@@ -3718,127 +3718,127 @@ class Skills:
 
         if check_space_only:
             result["success"] = True
-            result["message"] = f"ネザーゲート設置可能なスペースが見つかりました。座標: ({base_pos.x}, {base_pos.y}, {base_pos.z}), 向き: {orientation}軸方向"
+            result["message"] = f"Found space to place Nether portal. Coordinates: ({base_pos.x}, {base_pos.y}, {base_pos.z}), Orientation: {orientation}-axis"
             self.bot.chat(result["message"])
             print(result)
             return result
 
-        # スペースに移動
+        # Move to space
         move_result = await self.move_to_position(base_pos.x, base_pos.y, base_pos.z, 2)
         if not move_result["success"]:
-            result["message"] = f"ネザーゲート設置スペースへの移動に失敗しました: {move_result.get('message', '不明')}"
+            result["message"] = f"Failed to move to Nether portal space: {move_result.get('message', 'Unknown')}"
             result["error"] = "movement_failed"
             self.bot.chat(result["message"])
             print(result)
             return result
 
-        # --- 3. ネザーゲートフレーム設置 (10個の黒曜石) ---
+        # --- 3. Place Nether portal frame (10 obsidian blocks) ---
         portal_frame_coords = []
-        # 底辺 (y=0)
+        # Bottom side (y=0)
         portal_frame_coords.append(base_pos.offset(0, 0, 0))
         portal_frame_coords.append(base_pos.offset(1, 0, 0))
         portal_frame_coords.append(base_pos.offset(2, 0, 0))
         portal_frame_coords.append(base_pos.offset(3, 0, 0))
-        # 柱 (x=0)
+        # Pillars (x=0)
         portal_frame_coords.append(base_pos.offset(0, 1, 0))
         portal_frame_coords.append(base_pos.offset(0, 2, 0))
         portal_frame_coords.append(base_pos.offset(0, 3, 0))
         portal_frame_coords.append(base_pos.offset(3, 1, 0))
         portal_frame_coords.append(base_pos.offset(3, 2, 0))
         portal_frame_coords.append(base_pos.offset(3, 3, 0))
-        # 上辺 (y=4)
+        # Top side (y=4)
         portal_frame_coords.append(base_pos.offset(0, 4, 0))
         portal_frame_coords.append(base_pos.offset(1, 4, 0))
         portal_frame_coords.append(base_pos.offset(2, 4, 0))
         portal_frame_coords.append(base_pos.offset(3, 4, 0))
 
-        self.bot.chat("ネザーゲートフレームの設置を開始します...")
+        self.bot.chat("Beginning placement of Nether portal frame...")
         placed_count = 0
         for coord in portal_frame_coords:
             place_result = await self.place_block('obsidian', coord.x, coord.y, coord.z)
             if place_result["success"]:
                 placed_count += 1
-                await asyncio.sleep(0.1) # 設置の間隔を少し空ける
+                await asyncio.sleep(0.1) # Brief pause between placements
             else:
-                # 設置失敗時の処理（すでにブロックがある場合などは許容するかもしれない）
+                # Placement failure handling (might allow if block is already present)
                 block_at_coord = self.bot.blockAt(coord)
                 if block_at_coord and block_at_coord.name == 'obsidian':
-                    self.bot.chat(f"座標 ({coord.x}, {coord.y}, {coord.z}) には既に黒曜石があります。スキップします。")
-                    placed_count += 1 # 既に存在する場合もカウント
+                    self.bot.chat(f"Already an obsidian at ({coord.x}, {coord.y}, {coord.z}). Skipping.")
+                    placed_count += 1 # Count if already present
                     continue
                 else:
-                    result["message"] = f"ネザーゲートフレームの設置中にエラーが発生しました ({coord.x}, {coord.y}, {coord.z})。理由: {place_result.get('message', '不明')}"
+                    result["message"] = f"Error occurred during Nether portal frame placement ({coord.x}, {coord.y}, {coord.z}). Reason: {place_result.get('message', 'Unknown')}"
                     result["error"] = "placement_failed"
                     self.bot.chat(result["message"])
                     print(result)
-                    # TODO: 設置したブロックを撤去する処理を追加するか検討
+                    # TODO: Consider adding logic to dismantle placed blocks
                     return result
 
         if placed_count < 10:
-             # このケースは上のエラーハンドリングでカバーされるはずだが念のため
-             result["message"] = "ネザーゲートフレームの設置に失敗しました。必要な数の黒曜石を設置できませんでした。"
+             # Should be covered by above error handling, but here as a failsafe
+             result["message"] = "Failed to place Nether portal frame. Could not place the required amount of obsidian."
              result["error"] = "placement_failed"
              self.bot.chat(result["message"])
              print(result)
              return result
 
-        self.bot.chat("ネザーゲートフレームの設置が完了しました。")
+        self.bot.chat("Nether portal frame placement complete.")
 
-        # --- 4. ネザーゲート起動 ---
-        self.bot.chat("ネザーゲートの起動を試みます...")
+        # --- 4. Activate Nether portal ---
+        self.bot.chat("Attempting to activate Nether portal...")
 
-        # 火打石と打ち金を装備
+        # Equip flint and steel
         equip_result = await self.equip('flint_and_steel')
         if not equip_result["success"]:
-             result["message"] = "火打石と打ち金の装備に失敗しました。"
+             result["message"] = "Failed to equip flint and steel."
              result["error"] = "activation_failed"
              self.bot.chat(result["message"])
              print(result)
              return result
 
-        # 起動ターゲットブロック (フレーム下部の内側の黒曜石)
+        # Activation target block (inner obsidian at bottom of frame)
         activation_target_coord = None
-        portal_check_coord = None # ポータル生成確認用座標
+        portal_check_coord = None # Validation coordinates for portal generation
         if orientation == 'z':
-            activation_target_coord = base_pos.offset(1, 0, 0) # 底辺の左側
-            portal_check_coord = base_pos.offset(1, 1, 0) # ゲート内部の左下
+            activation_target_coord = base_pos.offset(1, 0, 0) # Left side of base
+            portal_check_coord = base_pos.offset(1, 1, 0) # Inside bottom-left of portal
         elif orientation == 'x':
-            activation_target_coord = base_pos.offset(0, 0, 1) # 底辺の手前側
-            portal_check_coord = base_pos.offset(0, 1, 1) # ゲート内部の手前下
+            activation_target_coord = base_pos.offset(0, 0, 1) # Front side of base
+            portal_check_coord = base_pos.offset(0, 1, 1) # Inside bottom-front of portal
 
         activation_target_block = self.bot.blockAt(activation_target_coord)
         if not activation_target_block or activation_target_block.name != 'obsidian':
-            result["message"] = f"ゲート起動のターゲットブロック (黒曜石) が見つかりません ({activation_target_coord.x}, {activation_target_coord.y}, {activation_target_coord.z})"
+            result["message"] = f"Could not find target block (obsidian) for portal activation at ({activation_target_coord.x}, {activation_target_coord.y}, {activation_target_coord.z})"
             result["error"] = "activation_failed"
             self.bot.chat(result["message"])
             print(result)
             return result
 
-        # ターゲットブロックに近づく (必要であれば)
+        # Move to target block (if necessary)
         if self.bot.entity.position.distanceTo(activation_target_coord) > 4.5:
              move_result = await self.move_to_position(activation_target_coord.x, activation_target_coord.y, activation_target_coord.z, 3)
              if not move_result["success"]:
-                 result["message"] = f"ゲート起動位置への移動に失敗: {move_result.get('message', '不明')}"
+                 result["message"] = f"Failed to move to portal activation position: {move_result.get('message', 'Unknown')}"
                  result["error"] = "activation_failed"
                  self.bot.chat(result["message"])
                  print(result)
                  return result
 
-        # ターゲットブロックを見る
-        self.bot.lookAt(activation_target_coord.offset(0.5, 0.5, 0.5), True) # ブロックの中心を見る
+        # Look at target block
+        self.bot.lookAt(activation_target_coord.offset(0.5, 0.5, 0.5), True) # Look at center of block
 
-        # 火打石と打ち金を使用 (activateBlock ではなく activateItem かもしれない)
-        # Mineflayerの activateBlock はブロック自体にインタラクトする。火打石はブロックに対して使う
+        # Use flint and steel (might be activateItem rather than activateBlock)
+        # Mineflayer's activateBlock interacts directly with the block. Flint and steel is used against blocks
         try:
-            # どの面に対して使用するかを指定 (ここでは上面を仮定 Vec3(0, 1, 0))
-            # activateBlockの第二引数は referenceBlock, 第三引数は faceVector
-            # faceVector はターゲットブロックのどの面をクリックするかを指定
-            # フレーム底の黒曜石の上面をクリックしてゲートを生成する
+            # Specify which face to use (assuming top side Vec3(0, 1, 0))
+            # activateBlock arg 2 is referenceBlock, arg 3 is faceVector
+            # faceVector dictates which face of the target block is clicked
+            # Click top face of the bottom obsidian block to generate portal
             self.bot.activateBlock(activation_target_block, Vec3(0, 1, 0))
-            self.bot.chat(f"座標 ({activation_target_block.position.x}, {activation_target_block.position.y}, {activation_target_block.position.z}) の黒曜石に火打石を使用しました。")
-            await asyncio.sleep(1.0) # ポータル生成待機
+            self.bot.chat(f"Used flint and steel on obsidian at ({activation_target_block.position.x}, {activation_target_block.position.y}, {activation_target_block.position.z}).")
+            await asyncio.sleep(1.0) # Wait for portal generation
         except Exception as e:
-            result["message"] = f"火打石と打ち金の使用中にエラーが発生しました: {str(e)}"
+            result["message"] = f"Error occurred while using flint and steel: {str(e)}"
             result["error"] = "activation_failed"
             self.bot.chat(result["message"])
             print(result)
@@ -3846,15 +3846,15 @@ class Skills:
             traceback.print_exc()
             return result
 
-        # --- 5. 起動確認 ---
+        # --- 5. Verify activation ---
         portal_block = self.bot.blockAt(portal_check_coord)
         if portal_block and portal_block.name == 'nether_portal':
             result["success"] = True
-            result["message"] = f"ネザーゲートが座標 ({base_pos.x}, {base_pos.y}, {base_pos.z}) に正常に作成・起動されました。"
+            result["message"] = f"Nether portal successfully created and activated at ({base_pos.x}, {base_pos.y}, {base_pos.z})."
             self.bot.chat(result["message"])
             print(result)
         else:
-            result["message"] = f"ネザーゲートの起動に失敗しました。ポータルブロックが生成されませんでした。確認座標: ({portal_check_coord.x}, {portal_check_coord.y}, {portal_check_coord.z}), 実際のブロック: {portal_block.name if portal_block else 'None'}"
+            result["message"] = f"Failed to activate Nether portal. Portal block was not generated. Check coordinates: ({portal_check_coord.x}, {portal_check_coord.y}, {portal_check_coord.z}), Actual block: {portal_block.name if portal_block else 'None'}"
             result["error"] = "verification_failed"
             self.bot.chat(result["message"])
             print(result)
