@@ -79,23 +79,32 @@ class Auto_gen:
             "family": ModelFamily.ANY,
         }
 
-        # Use Gemini 2.5 Flash-Lite as the unified model backend for all agents.
-        # Note: Google AI Studio provides an OpenAI-compatible endpoint at the v1beta base URL.
-        self.model_client = OpenAIChatCompletionClient(
+        # Gemini 2.5 Flash (Strategic Reasoning & Coding)
+        self.model_client_flash = OpenAIChatCompletionClient(
             model="gemini-2.5-flash",
             api_key=google_api_key,
             base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
             model_info=model_info,
         )
-        self.model_client_o1 = self.model_client
-        self.model_client_4o = self.model_client
-        self.model_client_deepseek = self.model_client
-        self.model_client_o4_mini = self.model_client
+        # Gemini 2.5 Flash-Lite (Fast Routing & Simple Tasks)
+        self.model_client_lite = OpenAIChatCompletionClient(
+            model="gemini-2.5-flash-lite",
+            api_key=google_api_key,
+            base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
+            model_info=model_info,
+        )
+
+        # Use Flash as the default for reasoning tasks
+        self.model_client = self.model_client_flash
+        self.model_client_o1 = self.model_client_flash
+        self.model_client_4o = self.model_client_flash
+        self.model_client_deepseek = self.model_client_flash
+        self.model_client_o4_mini = self.model_client_flash
         # Define the new consolidated agent
         self.BotInformationAgent = AssistantAgent(
             name="BotInformationAgent",
             tools=[self.get_bot_status_tool, self.capture_bot_view_tool], # Combine tools
-            model_client=self.model_client_4o, # Use a capable model, like gpt-4o for potential image analysis
+            model_client=self.model_client_lite, # Use lite for status retrieval
             description="An agent that retrieves and explains the Minecraft Bot's status (stats, inventory items, surroundings blocks, entities) and visual information.",
             system_message="""
             You are an agent specializing in gathering and reporting information about the Minecraft Bot's current state.
@@ -121,7 +130,7 @@ class Auto_gen:
 
         self.MissionPlannerAgent = AssistantAgent(
             name="MissionPlannerAgent",
-            model_client=self.model_client,
+            model_client=self.model_client_flash, # Use Flash for strategic planning
             description="Agent that formulates tasks to achieve goals based on the Minecraft Bot's status.",
             system_message=f"""
             You are an advanced AI agent with deep knowledge of Minecraft, formulating **verifiable tasks** to achieve the ultimate goal.
@@ -198,7 +207,7 @@ class Auto_gen:
         self.ProcessReviewerAgent = AssistantAgent(
             name="ProcessReviewerAgent",
             tools=[self.get_skill_summary_tool],
-            model_client=self.model_client,
+            model_client=self.model_client_lite, # Lite is enough for checking skill existence
             description="Agent that reviews whether the proposed task is executable given available functions and current Bot status.",
             system_message="""
             You are an agent evaluating if a proposed task is executable by the Minecraft Bot.
@@ -222,7 +231,7 @@ class Auto_gen:
         )
         self.TaskCompletionAgent = AssistantAgent(
             name="TaskCompletionAgent",
-            model_client=self.model_client,
+            model_client=self.model_client_lite, # Lite for checking conditions
             description="Agent that verifies task completion based on Python code execution results.",
             system_message="""
             You are an AI agent making the ultimate judgment on whether an executed task has met the **initially defined success conditions**.
@@ -247,7 +256,7 @@ class Auto_gen:
                 self.get_skill_summary_tool, 
                 self.get_skills_list_tool
             ],
-            model_client=self.model_client,
+            model_client=self.model_client_flash, # Flash for coding
             description="Agent that generates Python code to execute proposed tasks, runs it immediately, and reports results.",
             system_message="""
             You are a specialized AI agent that generates Python code to automate Minecraft Bot actions, **executes it immediately, and objectively reports the results.**
@@ -312,7 +321,7 @@ class Auto_gen:
                 self.get_skills_list_tool,
                 self.get_skill_code_tool
             ],
-            model_client=self.model_client,
+            model_client=self.model_client_flash, # Flash for debugging
             description="Agent that analyzes code execution errors and proposes debugging and fixes while referencing execution history and skill info.",
             system_message="""
             You are a highly analytical AI assistant that helps debug and solve Python code issues.
@@ -347,16 +356,23 @@ class Auto_gen:
             """
         )
     async def main(self,message:str) -> None:
-        selector_prompt = """You are an excellent leader choosing an agent to execute a task.
+        selector_prompt = """
+        Analyze the conversation history and select the next agent to speak.
+        You MUST ONLY reply with the exact name of the agent from the following list:
+        {participants}
 
+        Roles to follow:
         {roles}
 
-        Current conversation context:
+        Current context:
         {history}
 
-        Read the conversation above and choose the agent from {participants} to execute the next task.
-        Ensure the Planner Agent assigns the task before other agents start working.
-        Choose exactly one agent.
+        Constraint:
+        - Replying with anything other than the exact name of the agent will cause a system failure.
+        - Do not explain your choice.
+        - Do not use markdown (no backticks).
+        - Use plain text.
+        - Ensure MissionPlannerAgent is chosen first if no task is set.
         """
         termination = TextMentionTermination("Task Completed")
         team = SelectorGroupChat(
@@ -369,7 +385,7 @@ class Auto_gen:
                 self.TaskCompletionAgent
             ],
             #termination_condition=termination,
-            model_client=self.model_client,
+            model_client=self.model_client_lite, # Use Lite for faster routing
             selector_prompt=selector_prompt,
             allow_repeated_speaker=True,
         )
