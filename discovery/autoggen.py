@@ -385,7 +385,7 @@ class Auto_gen:
                 self.TaskCompletionAgent
             ],
             #termination_condition=termination,
-            model_client=self.model_client_lite, # Use Lite for faster routing
+            model_client=self.model_client_flash, # Use Flash for more robust routing
             selector_prompt=selector_prompt,
             allow_repeated_speaker=True,
         )
