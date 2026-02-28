@@ -271,6 +271,7 @@ class Auto_gen:
             - **Not Executable:** If inapplicable (too vague, skills not found, prerequisites unmet), state **specific reasons** (e.g., "Skill 'collect_specific_flower' was not found," "Not enough iron in inventory") and **propose concrete improvements on how to modify the task to make it executable**.
 
             Your role is to review and propose improvements. **You do not generate or execute specific code.** (That is CodeExecutionAgent's role.)
+            CRITICAL: YOU DO NOT HAVE ANY MINECRAFT SKILLS (like `collect_block` or `smelt_item`) AS AVAILABLE TOOLS. DO NOT attempt to call them. You must ask CodeExecutionAgent to execute them via Python.
             """
         )
         self.TaskCompletionAgent = AssistantAgent(
@@ -318,11 +319,12 @@ class Auto_gen:
             **Code Generation and Execution Rules:**
             1.  **Skill Check:** First, use `get_skill_summary_tool` or `get_skills_list_tool` to check available high-level skills (methods of the `skills` object).
             2.  **API Selection:** Balance using high-level `skills` functions and low-level `bot` APIs.
-            3.  **Prohibitions:**
+            3.  **Prohibitions and Awaiting Rules:**
                 - **Do not use `from` or `import` for external libraries.**
                 - **Do not define functions using `async def` or `def`.**
                 - Do not use functions or libraries unrelated to the provided APIs.
                 - Use of `while True` is prohibited to prevent infinite loops.
+                - **CRITICAL:** Every single call to a Minecraft skill MUST be awaited (e.g., `await skills.smelt_item(...)`, `await skills.collect_block(...)`). Failing to prepend `await` will silently fail the execution.
             4.  **Completion Report:** At the very end of your python code string, include a `print` statement to help judge task completion (e.g. `print(f"Collected {target_count} {item_name}.")`).
             5.  **Code Execution (MANDATORY):** You must execute your generated code by calling the `run_code` tool with your code string as the argument. 
             
@@ -373,6 +375,7 @@ class Auto_gen:
             Caution:
             - Focus on analysis and instructions. Ask other agents to execute code or check Bot status.
             - Avoid instructions that would cause a loop of more than 3 code propositions.
+            - CRITICAL: YOU DO NOT HAVE THE `run_code` TOOL OR MINECRAFT SKILLS. Do NOT attempt to output tool calls to run Python code directly. You MUST write a text message asking `CodeExecutionAgent` to execute the code.
 
             Your role is not to debug blindly when an error occurs, but to first consider the possibility of goal achievement, encourage the appropriate agent to judge, and then if necessary, **lead high-quality debugging in collaboration with `CodeExecutionAgent` based on deep analysis and logical deduction using available tools**.
             """
