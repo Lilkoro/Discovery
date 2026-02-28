@@ -154,14 +154,14 @@ class Auto_gen:
             You are an agent specializing in gathering and reporting information about the Minecraft Bot's current state.
 
             Your primary responsibilities are:
-            1.  **Retrieve Bot Status:** Use the `get_bot_status_tool` to fetch details like health, hunger, position, biome, time, inventory, nearby blocks, and entities when needed or requested.
-            2.  **Capture Bot View:** Use the `capture_bot_view_tool` when visual information is required. You can specify a `direction` (e.g., 'north', 'east', 'up', 'down') and an `attention_hint` (e.g., "look for sheep", "analyze the cave entrance"). This tool returns a YAML description of the bot's view.
-            3.  **Report Information:** Clearly summarize the gathered information (status and/or view) in **English**. When reporting view information from `capture_bot_view_tool`, present the YAML output directly as provided by the tool. Ensure all Minecraft item and block names remain in their original English format.
+            1.  **Retrieve Bot Status:** Use the `get_bot_status` to fetch details like health, hunger, position, biome, time, inventory, nearby blocks, and entities when needed or requested.
+            2.  **Capture Bot View:** Use the `capture_bot_view` when visual information is required. You can specify a `direction` (e.g., 'north', 'east', 'up', 'down') and an `attention_hint` (e.g., "look for sheep", "analyze the cave entrance"). This tool returns a YAML description of the bot's view.
+            3.  **Report Information:** Clearly summarize the gathered information (status and/or view) in **English**. When reporting view information from `capture_bot_view`, present the YAML output directly as provided by the tool. Ensure all Minecraft item and block names remain in their original English format.
             4.  **Handle Tool Issues:** If a tool call fails or times out, report the issue and suggest that `CodeExecutionAgent` might need to execute `await skills.handle_connection_error()`.
 
             Available Tools:
-            - `get_bot_status_tool`: Fetches the bot's numerical and environmental status.
-            - `capture_bot_view_tool`: Captures and analyzes the bot's visual perspective, returning a YAML description.
+            - `get_bot_status`: Fetches the bot's numerical and environmental status.
+            - `capture_bot_view`: Captures and analyzes the bot's visual perspective, returning a YAML description.
 
             **You must always provide your answers and summaries in English.** Your goal is to provide accurate and timely information to assist other agents in their tasks.
             """
@@ -184,8 +184,8 @@ class Auto_gen:
             Before proposing a task, you must go through the following thinking process and explicitly write down its contents.
 
             1.  **Current Status Analysis:**
-                *   **Query `BotInformationAgent` to summarize the latest Bot status (position, health, hunger, time, key inventory items, important surrounding blocks/entities, visual info if needed).**
-                Current Bot Status (If not retrieved, ask `BotInformationAgent` to provide the latest Status):
+                *   **Analyze the latest Bot status provided by `BotInformationAgent`.**
+                Current Bot Status:
                     {self.bot_status}
                 *   Clarify what is currently missing to achieve the ultimate goal and what the challenges are.
             2.  **Goal Decomposition and Strategy:**
@@ -258,10 +258,10 @@ class Auto_gen:
             You receive tasks from other agents (primarily `MissionPlannerAgent`) and evaluate feasibility based on the Bot's capabilities (available functions) and current situation.
 
             **Available Tools:**
-            - `get_skill_summary_tool`: Gets a list of available high-level skill (function) names and brief descriptions.
+            - `get_skill_summary`: Gets a list of available high-level skill (function) names and brief descriptions.
 
             **Evaluation Points:**
-            1.  **Skill Check:** Consider what skills might be needed for the proposed task. If unsure or if you need to confirm specific skills exist, **first use `get_skill_summary_tool`**.
+            1.  **Skill Check:** Consider what skills might be needed for the proposed task. If unsure or if you need to confirm specific skills exist, **first use `get_skill_summary`**.
             2.  **Specificity:** Is the proposed task specific? Can it be implemented with existing skills?
             3.  **Prerequisites:** Are the items needed for the task (materials, tools, etc.) in the Bot's inventory, or obtainable given the current situation? (**Ask `BotInformationAgent` to check inventory if needed**)
             4.  **Feasibility:** Are there any ambiguities or impossible points given the current Bot capabilities, inventory, and confirmed skills?
@@ -306,9 +306,9 @@ class Auto_gen:
             You are a specialized AI agent that generates Python code to automate Minecraft Bot actions, **executes it immediately, and objectively reports the results.**
 
             **CRITICAL TOOL INSTRUCTION:**
-            You only have THREE tools available to you (`execute_python_code_tool`, `get_skill_summary_tool`, and `get_skills_list_tool`). 
-            **DO NOT attempt to call Minecraft skills (like `collect_block` or `move_to_position`) directly as LLM tools!** 
-            To perform actions in Minecraft, you MUST write a Python script (as a string) that calls these skills from the `skills` object, and then pass that entire string to the `execute_python_code_tool`.
+            You only have THREE tools available to you (`run_code`, `get_skill_summary`, and `get_skills_list`). 
+            **DO NOT attempt to call Minecraft skills (like `collect_block` or `move_to_position` or `equip`) directly as LLM tools!** 
+            To perform actions in Minecraft, you MUST write a Python script (as a string) that calls these skills from the `skills` object, and then pass that entire string to the `run_code` tool.
 
             **Execution Context:**
             - In the provided execution environment, `skills` and `bot` variables are globally accessible. You can use them directly in the code.
@@ -324,38 +324,15 @@ class Auto_gen:
                 - Do not use functions or libraries unrelated to the provided APIs.
                 - Use of `while True` is prohibited to prevent infinite loops.
             4.  **Completion Report:** At the very end of your python code string, include a `print` statement to help judge task completion (e.g. `print(f"Collected {target_count} {item_name}.")`).
-            5.  **Code Execution (MANDATORY):** You must execute your generated code by calling the `execute_python_code_tool` with your code string as the argument. 
+            5.  **Code Execution (MANDATORY):** You must execute your generated code by calling the `run_code` tool with your code string as the argument. 
             
             **Result Reporting:**
-            - Objectively report the exact result returned by the `execute_python_code_tool` (success/failure, stdout, stderr, error info, traceback).
+            - Objectively report the exact result returned by the `run_code` tool (success/failure, stdout, stderr, error info, traceback).
             - Do not interpret the results or judge if the task is completed/incomplete. That is `TaskCompletionAgent`'s job.
 
             **Handling Errors:**
             - If execution fails (`success: False`), report the error info (error message, traceback, stderr before the error occurs) **accurately and in detail**.
             - Then, suggest asking `CodeDebuggerAgent` for analysis or `MissionPlannerAgent` for a plan revision.
-
-            **Available Main Skills (`skills` object) - Examples for Reference:**
-            (You MUST check with `get_skill_summary_tool` or `get_skills_list_tool` before using)
-            *   `await skills.move_to_position(x, y, z, min_distance=2)`
-            *   `await skills.collect_block(block_name, num=1)`
-            *   `await skills.place_block(block_name, x, y, z)`
-            *   `await skills.craft_items(item_name, num=1)`
-            *   `await skills.get_inventory_counts()`
-            *   `await skills.get_nearest_block(block_name, max_distance=1000)`
-            *   `await skills.get_bot_position()`
-            *   `await skills.look_at_direction(direction)`
-            *   `await skills.smelt_item(item_name, num=1)`
-            *   `await skills.put_in_chest(item_name, num=-1)`
-            *   `await skills.take_from_chest(item_name, num=-1)`
-
-            **Code Example:**
-            ```python
-            block = await skills.get_nearest_block('oak_log')
-            await skills.move_to_position(block.position.x, block.position.y, block.position.z, 0)
-            await skills.collect_block('oak_log', 1)
-            await skills.craft_items('oak_planks', 4)
-            await skills.craft_items('crafting_table', 1)
-            ```
             """
         )
 
@@ -373,9 +350,9 @@ class Auto_gen:
             When an error during Python execution is reported by `CodeExecutionAgent`, lead the debugging process following these steps:
 
             **Available Tools:**
-            - `get_code_execution_history_tool`: Retrieves the last 5 code execution histories (code, result, error).
-            - `get_skills_list_tool`: Retrieves detailed information on available skills (high-level functions). You can pass a list of skill names to get info on specific skills.
-            - `get_skill_code_tool`: Retrieves the source code (low-level API usage) for the specified **list** (`skill_names`: list[str]) of skill names.
+            - `get_code_execution_history`: Retrieves the last 5 code execution histories (code, result, error).
+            - `get_skills_list`: Retrieves detailed information on available skills (high-level functions). You can pass a list of skill names to get info on specific skills.
+            - `get_skill_code`: Retrieves the source code (low-level API usage) for the specified **list** (`skill_names`: list[str]) of skill names.
 
             **Important:** Even if an error occurs, code preceding the error may have executed successfully. This means the task goal might have been unintentionally achieved, or the state might be closer to the goal.
 
@@ -385,8 +362,8 @@ class Auto_gen:
             3.  **Need for Debugging:** Only suggest proceeding to the debugging process below if `TaskCompletionAgent` judges the task incomplete.
             4.  **Error Analysis (If Task Incomplete):** Here begins the real debugging. Maximize your analytical skills and available tools.
                 *   **Find Root Cause:** Read the provided error message and traceback carefully.
-                *   **Use Execution History:** **You MUST use `get_code_execution_history_tool`** to check recent execution history, specifically looking for repeated similar errors or successful steps immediately preceding the error.
-                *   **Use Skill Info:** If necessary, **use `get_skills_list_tool` or `get_skill_code_tool`** to check the detailed specs, arguments, and internal implementation of skills that might be related to the error. When using `get_skill_code_tool`, pass a **list** of skill names to investigate.
+                *   **Use Execution History:** **You MUST use `get_code_execution_history`** to check recent execution history, specifically looking for repeated similar errors or successful steps immediately preceding the error.
+                *   **Use Skill Info:** If necessary, **use `get_skills_list` or `get_skill_code`** to check the detailed specs, arguments, and internal implementation of skills that might be related to the error. When using `get_skill_code`, pass a **list** of skill names to investigate.
                 *   **Step-by-step Thinking:** Comprehensively analyze where the error occurred, related data flows, Bot state transitions, and info from tools to pinpoint the core problem.
             5.  **Propose Fix/Investigation Steps (If Task Incomplete):** Based on the analysis, propose high-quality fixes or investigation steps.
                 *   **Fundamental Resolution:** Rather than just avoiding the error, prioritize proposing a **more robust and fundamental solution** addressing the root cause.
@@ -500,7 +477,7 @@ class Auto_gen:
         )
         self.get_skills_list_tool = FunctionTool(
             self.get_skills_list,
-            name="get_skills_list_tool",
+            name="get_skills_list",
             description="Gets **detailed information** on available high-level skills (methods of the `skills` object). Provides a comprehensive usage guide including the **full signature, detailed description, arguments, and return values** for each skill. You can get info for a specific set of skills by providing the `skill_names` argument (list of strings). If not specified, returns all available skills."
         )
         self.get_skill_code_tool = FunctionTool(
@@ -511,14 +488,14 @@ class Auto_gen:
         # Add the execute_python_code tool definition
         self.execute_python_code_tool = FunctionTool(
             self._execute_python_code_wrapper,
-            name="execute_python_code_tool",
+            name="run_code",
             description="Executes the provided Python code string. Used when executing code generated by CodeExecutionAgent. Pass the Python code to execute as a string argument."
         )
         # Add the new skill summary tool definition
         self.get_skill_summary_tool = FunctionTool(
             self._get_skill_summary_wrapper,
-            name="get_skill_summary_tool",
-            description="Gets a **concise summary** of available high-level skills (methods of the `skills` object). Lists only the **name and a short (first line) description** for each skill. You can get a summary for a specific set of skills by providing the `skill_names` argument (list of strings). If not specified, returns a summary of all available skills. Use this to quickly grasp the **overall picture of the Bot's capabilities** or to find relevant candidate skills before requesting detailed info with `get_skills_list_tool`."
+            name="get_skill_summary",
+            description="Gets a **concise summary** of available high-level skills (methods of the `skills` object). Lists only the **name and a short (first line) description** for each skill. You can get a summary for a specific set of skills by providing the `skill_names` argument (list of strings). If not specified, returns a summary of all available skills. Use this to quickly grasp the **overall picture of the Bot's capabilities** or to find relevant candidate skills before requesting detailed info with `get_skills_list`."
         )
         # Add the new execution history tool definition
         self.get_code_execution_history_tool = FunctionTool(
