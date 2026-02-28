@@ -6,7 +6,10 @@ from discovery.discovery import Discovery
 from dotenv import load_dotenv
 from typing import List
 
-import google.generativeai as genai
+import re
+import time
+import openai
+from openai import RateLimitError
 from autogen_agentchat.agents import AssistantAgent
 from autogen_agentchat.conditions import ExternalTermination, TextMentionTermination
 from autogen_agentchat.teams import SelectorGroupChat
@@ -15,6 +18,7 @@ from autogen_ext.models.openai import OpenAIChatCompletionClient
 from autogen_core.model_context import UnboundedChatCompletionContext
 from autogen_core.tools import FunctionTool
 from autogen_core.models import AssistantMessage, LLMMessage, ModelFamily
+from autogen_agentchat.messages import AgentChatEvent
 
 class ReasoningModelContext(UnboundedChatCompletionContext):
     """A model context for reasoning models."""
@@ -28,6 +32,18 @@ class ReasoningModelContext(UnboundedChatCompletionContext):
                 message.thought = None
             messages_out.append(message)
         return messages_out
+
+class LimitedHistorySelectorGroupChat(SelectorGroupChat):
+    """A SelectorGroupChat that only sees the last N messages to save tokens and avoid quotas."""
+    def __init__(self, *args, max_history: int = 15, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._max_history = max_history
+
+    async def _format_history(self, messages: List[AgentChatEvent]) -> str:
+        # Use only the last N messages for the selector's context
+        if len(messages) > self._max_history:
+            messages = messages[-self._max_history:]
+        return await super()._format_history(messages)
 
 class Auto_gen:
     def __init__(self,discovery: Discovery) -> None:
@@ -375,7 +391,9 @@ class Auto_gen:
         - Ensure MissionPlannerAgent is chosen first if no task is set.
         """
         termination = TextMentionTermination("Task Completed")
-        team = SelectorGroupChat(
+        
+        # Use our custom selector that limits history to avoid 429 errors
+        team = LimitedHistorySelectorGroupChat(
             participants= [
                 self.BotInformationAgent,
                 self.MissionPlannerAgent,
@@ -388,10 +406,33 @@ class Auto_gen:
             model_client=self.model_client_flash, # Use Flash for more robust routing
             selector_prompt=selector_prompt,
             allow_repeated_speaker=True,
+            max_history=12 # Keep it tight (approx 10-12 messages is plenty for the selector)
         )
-        await Console(
-            team.run_stream(task=message)
-        )
+
+        while True:
+            try:
+                await Console(
+                    team.run_stream(task=message)
+                )
+                break # Exit loop if completed successfully
+            except RateLimitError as e:
+                # Handle Google AI Studio / OpenAI Quota (429)
+                error_msg = str(e)
+                wait_time = 20 # Default retry time
+                
+                # Try to extract the retry delay from the error message (e.g., "retry in 17.3s")
+                match = re.search(r"retry in (\d+\.?\d*)s", error_msg)
+                if match:
+                    wait_time = float(match.group(1)) + 1 # Add safety buffer
+
+                print(f"\n\033[93m[QUOTA] API Rate Limit hit. Waiting {wait_time:.1f}s before retrying task...\033[0m")
+                await asyncio.sleep(wait_time)
+                print(f"\033[94mResuming task...\033[0m\n")
+            except Exception as e:
+                print(f"\n\033[91m[ERROR] An unexpected error occurred in AutoGen: {e}\033[0m")
+                import traceback
+                traceback.print_exc()
+                break
     
     def load_prompt_template(self, prompt_name: str) -> str:
         """Loads a YAML file from the prompts directory and returns the PromptTemplate as a string."""
