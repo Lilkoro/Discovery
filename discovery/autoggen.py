@@ -163,6 +163,8 @@ class Auto_gen:
             - `get_bot_status`: Fetches the bot's numerical and environmental status.
             - `capture_bot_view`: Captures and analyzes the bot's visual perspective, returning a YAML description.
 
+            **CRITICAL TOOL RULE**: You MUST ONLY call the tools `get_bot_status` and `capture_bot_view`. You DO NOT have access to Minecraft skills. DO NOT hallucinate tool calls.
+
             **You must always provide your answers and summaries in English.** Your goal is to provide accurate and timely information to assist other agents in their tasks.
             """
         )
@@ -271,7 +273,7 @@ class Auto_gen:
             - **Not Executable:** If inapplicable (too vague, skills not found, prerequisites unmet), state **specific reasons** (e.g., "Skill 'collect_specific_flower' was not found," "Not enough iron in inventory") and **propose concrete improvements on how to modify the task to make it executable**.
 
             Your role is to review and propose improvements. **You do not generate or execute specific code.** (That is CodeExecutionAgent's role.)
-            CRITICAL: YOU DO NOT HAVE ANY MINECRAFT SKILLS (like `collect_block` or `smelt_item`) AS AVAILABLE TOOLS. DO NOT attempt to call them. You must ask CodeExecutionAgent to execute them via Python.
+            CRITICAL: YOU DO NOT HAVE ANY MINECRAFT SKILLS (like `collect_block` or `smelt_item`) AS AVAILABLE TOOLS. DO NOT attempt to call them. You must ask CodeExecutionAgent to execute them via Python. The ONLY tool you have is `get_skill_summary`. DO NOT hallucinate other tools.
             """
         )
         self.TaskCompletionAgent = AssistantAgent(
@@ -375,7 +377,8 @@ class Auto_gen:
             Caution:
             - Focus on analysis and instructions. Ask other agents to execute code or check Bot status.
             - Avoid instructions that would cause a loop of more than 3 code propositions.
-            - CRITICAL: YOU DO NOT HAVE THE `run_code` TOOL OR MINECRAFT SKILLS. Do NOT attempt to output tool calls to run Python code directly. You MUST write a text message asking `CodeExecutionAgent` to execute the code.
+            - CRITICAL TOOL RULE: You only have three tools: `get_code_execution_history`, `get_skills_list`, and `get_skill_code`. YOU DO NOT HAVE `get_bot_status`, `get_inventory_counts`, OR ANY OTHER MINECRAFT SKILLS! If you want to check the bot status, you MUST write a plain text message asking `TaskCompletionAgent` or `MissionPlannerAgent` to look at the bot status. Do NOT output a tool call for it.
+            - CRITICAL: YOU DO NOT HAVE THE `run_code` TOOL. Do NOT attempt to output tool calls to run Python code directly. You MUST write a text message asking `CodeExecutionAgent` to execute the code.
 
             Your role is not to debug blindly when an error occurs, but to first consider the possibility of goal achievement, encourage the appropriate agent to judge, and then if necessary, **lead high-quality debugging in collaboration with `CodeExecutionAgent` based on deep analysis and logical deduction using available tools**.
             """
@@ -470,12 +473,12 @@ class Auto_gen:
     def load_tool(self) -> None:
         self.get_bot_status_tool = FunctionTool(
             self.get_bot_status,
-            name="get_bot_status_tool",
+            name="get_bot_status",
             description="Tool to get the state of the MineCraftBot. Returns a dictionary containing the BOT's current position, biome, health, hunger, time, nearby block info, nearby entity info, and inventory info."
         )
         self.capture_bot_view_tool = FunctionTool(
             self.capture_bot_view,
-            name="capture_bot_view_tool",
+            name="capture_bot_view",
             description="Tool to get the visual info of the MineCraftBot after looking in a specified direction. Returns the BOT's perspective info as a YAML string. You can specify the direction with the `direction` argument (e.g. 'north', 'east', 'up'). Gets info including distant scenery."
         )
         self.get_skills_list_tool = FunctionTool(
@@ -485,7 +488,7 @@ class Auto_gen:
         )
         self.get_skill_code_tool = FunctionTool(
             self._get_skill_code_wrapper,
-            name="get_skill_code_tool",
+            name="get_skill_code",
             description="Tool to get the source code for a specified **list** of MineCraftBot skill functions (`skill_names`: list[str]) (excluding docstrings). Use this to check the detailed behavior or how low-level APIs are used within a skill function."
         )
         # Add the execute_python_code tool definition
@@ -503,7 +506,7 @@ class Auto_gen:
         # Add the new execution history tool definition
         self.get_code_execution_history_tool = FunctionTool(
             self._get_code_execution_history_wrapper,
-            name="get_code_execution_history_tool",
+            name="get_code_execution_history",
             description="Retrieves the last 5 code execution histories (executed code, success/failure, output, error) from newest to oldest. Useful for debugging and revising plans."
         )
     async def get_skills_list(self) -> str:
