@@ -1,16 +1,17 @@
 import asyncio
+import base64
 import os
 import yaml
 from discovery.discovery import Discovery
-from openai import AsyncOpenAI
 from dotenv import load_dotenv
 from typing import List
 
+import google.generativeai as genai
 from autogen_agentchat.agents import AssistantAgent
 from autogen_agentchat.conditions import ExternalTermination, TextMentionTermination
 from autogen_agentchat.teams import SelectorGroupChat
 from autogen_agentchat.ui import Console
-from autogen_ext.models.openai import OpenAIChatCompletionClient
+from autogen_ext.models.gemini import GeminiChatCompletionClient
 from autogen_core.model_context import UnboundedChatCompletionContext
 from autogen_core.tools import FunctionTool
 from autogen_core.models import AssistantMessage, LLMMessage, ModelFamily
@@ -64,23 +65,25 @@ class Auto_gen:
         return client
     
     def load_agents(self) -> None:
-        # Ollama configuration
-        base_url = "http://host.docker.internal:11434/v1"
-    
+        # Gemini configuration (text + vision) using official Google API
+        google_api_key = os.getenv("GOOGLE_API_KEY")
+        if not google_api_key:
+            raise ValueError("GOOGLE_API_KEY environment variable is not set. Please configure your Gemini API key.")
+
         model_info = {
             "vision": True,
             "function_calling": True,
             "json_output": True,
             "structured_output": False,
             "multiple_system_messages": True,
-            "family": ModelFamily.ANY
+            "family": ModelFamily.ANY,
         }
 
-        self.model_client = OpenAIChatCompletionClient(
-            model="qwen2.5:7b",
-            api_key="ollama", # Placeholder for Ollama
-            base_url=base_url,
-            model_info=model_info
+        # Use Gemini 2.5 Flash-Lite as the unified model backend for all agents.
+        self.model_client = GeminiChatCompletionClient(
+            model="gemini-2.5-flash-lite",
+            api_key=google_api_key,
+            model_info=model_info,
         )
         self.model_client_o1 = self.model_client
         self.model_client_4o = self.model_client
@@ -599,7 +602,7 @@ class Auto_gen:
     async def capture_bot_view(self, direction: str = 'north', attention_hint: str = None) -> str:
         """
         Looks in the specified direction, takes a screenshot from Prismarine Viewer,
-        analyzes the content with GPT-4o, and returns a YAML formatted string.
+        analyzes the content with Gemini 2.5 Flash-Lite, and returns a YAML formatted string.
 
         Args:
             direction (str, optional): Direction to look before screenshot. (e.g., 'north', 'south', 'east', 'west', 'up', 'down')
@@ -617,40 +620,64 @@ class Auto_gen:
             return "None" # Return string indicating error
         # --- End of changes ---
 
-        # Use Ollama Vision (e.g., llava or qwen2-vl) via OpenAI-compatible API
-        vision_client = AsyncOpenAI(base_url="http://host.docker.internal:11434/v1", api_key="ollama")
-        
         try:
+            google_api_key = os.getenv("GOOGLE_API_KEY")
+            if not google_api_key:
+                print("Error: GOOGLE_API_KEY environment variable is not set. Cannot call Gemini vision model.")
+                return "None"
+
+            # Configure Gemini client (idempotent if called multiple times)
+            genai.configure(api_key=google_api_key)
+            vision_model = genai.GenerativeModel("gemini-2.5-flash-lite")
+
             prompt = "This is a Minecraft game screenshot. Analyze the image content in detail, and describe important objects, block types, MOBs, threat information, and other visual information in a hierarchical YAML format."
             if attention_hint is not None:
                 prompt += f"\nPay special attention to [{attention_hint}] and describe it in detail."
             prompt += "\nNote: The visual information is obtained from an emulator's perspective, so weather and time are not reflected. Also, some entity textures might be bugged and appear purple."
 
-            response = await vision_client.chat.completions.create(
-                model="llava:7b",
-                messages=[
+            # Decode base64 image and send as inline data to Gemini (multimodal: text + image)
+            try:
+                image_bytes = base64.b64decode(base64_image)
+            except Exception as e:
+                print(f"Error: Failed to decode base64 screenshot: {e}")
+                return "None"
+
+            gemini_response = vision_model.generate_content(
+                [
+                    prompt,
                     {
-                        "role": "user",
-                        "content": [
-                            {"type": "text", "text": prompt},
-                            {
-                                "type": "image_url",
-                                "image_url": {
-                                    "url": f"data:image/jpeg;base64,{base64_image}"
-                                },
-                            },
-                        ],
-                    }
-                ],
+                        "inline_data": {
+                            "mime_type": "image/jpeg",
+                            "data": image_bytes,
+                        }
+                    },
+                ]
             )
-            yaml_output = response.choices[0].message.content
+
+            # Prefer the convenience .text property if available
+            yaml_output = getattr(gemini_response, "text", None)
+            if not yaml_output and getattr(gemini_response, "candidates", None):
+                candidate = gemini_response.candidates[0]
+                parts = getattr(candidate, "content", getattr(candidate, "parts", None))
+                text_parts = []
+                if parts and getattr(parts, "parts", None):
+                    parts = parts.parts
+                if parts:
+                    for part in parts:
+                        if hasattr(part, "text") and part.text:
+                            text_parts.append(part.text)
+                yaml_output = "\n".join(text_parts) if text_parts else ""
+
+            if not yaml_output:
+                print("Error: Gemini response did not contain any text.")
+                return "None"
             
             # If YAML output is surrounded by ```yaml ... ```, extract the content
             if yaml_output.startswith("```yaml\n"):
                 yaml_output = yaml_output[len("```yaml\n"):]
             if yaml_output.endswith("\n```"):
                 yaml_output = yaml_output[:-len("\n```")]
-            print("\033[34mScreenshot content analyzed with Gemini 2.5 Flash and described in YAML format.\033[0m")
+            print("\033[34mScreenshot content analyzed with Gemini 2.5 Flash-Lite and described in YAML format.\033[0m")
             return yaml_output.strip()
 
         except Exception as e:
