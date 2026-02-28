@@ -68,24 +68,30 @@ class Auto_gen:
         return client
     
     def load_agents(self) -> None:
-        self.model_client = OpenAIChatCompletionClient(model="gpt-4.1")
-        self.model_client_o1 = OpenAIChatCompletionClient(model="o1")
-        self.model_client_4o = OpenAIChatCompletionClient(model="gpt-4o")
-        self.model_client_deepseek = self.deepseek_client(model_name="deepseek-reasoner")
+        # Load Google API Key
+        api_key = os.getenv("GOOGLE_API_KEY")
+        if not api_key:
+            raise ValueError("GOOGLE_API_KEY environment variable is not set. Please set it to use Gemini.")
+    
+        model_info = {
+            "vision": True,
+            "function_calling": True,
+            "json_output": True,
+            "structured_output": False,
+            "multiple_system_messages": True,
+            "family": ModelFamily.ANY
+        }
 
-        # Add the new gpt-4o-mini client
-        self.model_client_o4_mini = OpenAIChatCompletionClient(
-            model="gpt-4o-mini",
-            api_key=os.getenv("OPENAI_API_KEY"), # Assuming standard OpenAI API key
-            model_info={
-                "vision": False,            # gpt-4o-mini does not have vision capabilities
-                "function_calling": True,   # OpenAI models generally support function calling
-                "json_output": True,        # OpenAI models generally support JSON mode
-                "structured_output": False, # Assuming not directly supported via Pydantic models
-                "multiple_system_messages": True, # Assuming support
-                "family": ModelFamily.UNKNOWN
-            }
+        self.model_client = OpenAIChatCompletionClient(
+            model="gemini-2.5-flash-lite",
+            api_key=api_key,
+            base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
+            model_info=model_info
         )
+        self.model_client_o1 = self.model_client
+        self.model_client_4o = self.model_client
+        self.model_client_deepseek = self.model_client
+        self.model_client_o4_mini = self.model_client
 
         # Define the new consolidated agent
         self.BotInformationAgent = AssistantAgent(
