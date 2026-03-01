@@ -33,40 +33,6 @@ class ReasoningModelContext(UnboundedChatCompletionContext):
             messages_out.append(message)
         return messages_out
 
-class LimitedHistorySelectorGroupChat(SelectorGroupChat):
-    """A SelectorGroupChat that only sees the last N messages to save tokens and avoid quotas."""
-    def __init__(self, *args, max_history: int = 15, **kwargs):
-        super().__init__(*args, **kwargs)
-        self._max_history = max_history
-
-    async def _format_history(self, messages: List[AgentEvent]) -> str:
-        # Use only the last N messages for the selector's context
-        if len(messages) > self._max_history:
-            messages = messages[-self._max_history:]
-        
-        # Build the history string manually to avoid polluting the original messages
-        # We strip detailed block/entity lists which the selector doesn't need to choose a speaker.
-        history_str = ""
-        for msg in messages:
-            content = ""
-            # Safely check for content in different message types
-            if hasattr(msg, "content") and isinstance(msg.content, str):
-                content = msg.content
-                # Aggressive truncation for the selector (it only needs the gist of the message)
-                content = re.sub(r"'(?:front|back|left|right|center)_blocks': \[.*?\]", "'blocks': [REDACTED]", content, flags=re.DOTALL)
-                content = re.sub(r"'nearby_entities': \[.*?\]", "'entities': [REDACTED]", content, flags=re.DOTALL)
-                # If content is still too long, truncate it to avoid token explosion
-                if len(content) > 1500:
-                    content = content[:1500] + "... (truncated for selector)"
-            
-            # Identify sender (source)
-            source = getattr(msg, "source", "system")
-            history_str += f"[{source}]: {content}\n\n"
-            
-        return history_str
-        return history_str
-
-
 class RateLimitingClientWrapper:
     """Wraps an AutoGen ChatCompletionClient to handle 429 RateLimitErrors seamlessly without crashing the GroupChat."""
     def __init__(self, client):
@@ -87,7 +53,7 @@ class RateLimitingClientWrapper:
             except Exception as e:
                 import re
                 if "429" in str(e) or "quota" in str(e).lower() or "RateLimitError" in str(e) or "RESOURCE_EXHAUSTED" in str(e):
-                    wait_time = 20
+                    wait_time = 61
                     match = re.search(r"retry in (\d+\.?\d*)s", str(e))
                     if match:
                         wait_time = max(wait_time, float(match.group(1)) + 1)
@@ -460,8 +426,8 @@ class Auto_gen:
         """
         termination = TextMentionTermination("Task Completed")
         
-        # Use our custom selector that limits history to avoid 429 errors
-        team = LimitedHistorySelectorGroupChat(
+        # Use standard SelectorGroupChat
+        team = SelectorGroupChat(
             participants= [
                 self.BotInformationAgent,
                 self.MissionPlannerAgent,
@@ -474,7 +440,6 @@ class Auto_gen:
             model_client=self.model_client_flash, # Use Flash for more robust routing
             selector_prompt=selector_prompt,
             allow_repeated_speaker=True,
-            max_history=8 # Even tighter window to stay under quotas
         )
 
         try:
