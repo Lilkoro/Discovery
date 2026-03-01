@@ -72,7 +72,7 @@ class RateLimitingClientWrapper:
             except Exception as e:
                 import re
                 if "429" in str(e) or "quota" in str(e).lower() or "RateLimitError" in str(e) or "RESOURCE_EXHAUSTED" in str(e):
-                    wait_time = 20
+                    wait_time = 61
                     match = re.search(r"retry in (\d+\.?\d*)s", str(e))
                     if match:
                         wait_time = max(wait_time, float(match.group(1)) + 1)
